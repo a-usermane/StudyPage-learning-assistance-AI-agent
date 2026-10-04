@@ -8,7 +8,7 @@ export class Shell {
     installNavigationIcons();
     $('home-button').onclick = $('settings-home').onclick = () => { location.hash = '#/'; };
     $('settings-button').onclick = () => { location.hash = '#/settings'; };
-    $('plugins-button').onclick = () => this.help('插件自定义', '插件功能暂未实现。后续可在这里管理课程学习插件。');
+    $('plugins-button').onclick = () => this.help('本地学习插件', '插件通过 plugins 目录中的 plugin.yaml 配置启停，可组合提示词、Skill 和只读 MCP。修改后到设置页重载配置，状态也会在设置页显示。');
     $('menu-button').onclick = () => this.toggleMenu();
     $('menu-close').onclick = $('drawer-backdrop').onclick = () => this.toggleMenu(false);
     $('menu-new').onclick = $('home-new').onclick = () => commands.newCourse();

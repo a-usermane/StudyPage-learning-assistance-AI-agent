@@ -16,7 +16,7 @@ from backend.service.library import LibraryService
 from backend.api.routes import router
 from backend.api.middleware import UploadBodyLimit
 
-def create_app(data_dir=None, service=None, settings=None):
+def create_app(data_dir=None, service=None, settings=None, learning=None, config_root=None):
     settings = settings or Settings.load(data_dir)
     temp = settings.cache_dir / "tmp"
     temp.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,28 @@ def create_app(data_dir=None, service=None, settings=None):
                 LocalDocumentParser(), DemoAnswerProvider(), settings.upload_limit)
         else:
             application.state.library = service
-        yield
+        if learning is None:
+            from backend.dp.agent_config import LocalProfileRegistry
+            from backend.dp.agent_storage import SQLiteSessionStore, AgentRecordStore
+            from backend.dp.retrieval import SQLiteRetriever
+            from backend.dp.model_gateway import RegisteredModelGateway
+            from backend.dp.mcp_tools import MCPConnections
+            from backend.dp.agent_runtime import LearningRuntime
+            from backend.service.learning import LearningService
+            repository = application.state.library.repository
+            retriever = SQLiteRetriever(repository)
+            retriever.rebuild()
+            mcp = MCPConnections()
+            runtime = LearningRuntime(RegisteredModelGateway(),mcp,settings.data_dir / "db/checkpoints.db")
+            registry = LocalProfileRegistry(config_root or ROOT,workflows=runtime.workflows,tools=runtime.tools.factories,adapters=runtime.gateway.adapters)
+            application.state.learning = LearningService(application.state.library,registry,runtime,retriever,
+                SQLiteSessionStore(settings.data_dir / "db/agent-sessions.db"),AgentRecordStore(repository),mcp)
+        else:
+            application.state.learning = learning
+        try:
+            yield
+        finally:
+            await application.state.learning.close()
 
     application = FastAPI(title="课程书桌 · 本地演示", lifespan=lifespan)
     application.state.settings = settings
@@ -60,6 +81,8 @@ def create_app(data_dir=None, service=None, settings=None):
         return response
 
     application.include_router(router)
+    from backend.api.agent_routes import router as agent_router
+    application.include_router(agent_router)
     application.mount("/static", StaticFiles(directory=ROOT / "frontend"), name="static")
     application.mount("/samples", StaticFiles(directory=ROOT / "samples", check_dir=False), name="samples")
 

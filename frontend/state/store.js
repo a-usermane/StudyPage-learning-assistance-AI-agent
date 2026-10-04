@@ -10,5 +10,5 @@ export const state = {
   uploadLimit: 20 * 1024 * 1024, uploadBusy: false, chatBusy: false,
   translation: preference('translation', false), menuOpen: preference('menu-open', true),
   swapped: preference('swapped', false), split: preference('split', 38),
-  failedUploads: new Map()
+  failedUploads: new Map(), agentMode: preference('agent-mode', null), agentStatus: null
 };

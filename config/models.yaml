@@ -1,0 +1,12 @@
+# mode: demo 或 live。填写模型信息和密钥后改为 live，再重载配置。
+mode: demo
+models:
+  study_model:
+    adapter: openai_compatible
+    base_url: https://api.openai.com/v1
+    model: replace-with-your-model-id
+    api_key_env: STUDY_API_KEY
+    context_window: 16384
+    context_budget: 16384
+    output_tokens: 2048
+    temperature: 0.2

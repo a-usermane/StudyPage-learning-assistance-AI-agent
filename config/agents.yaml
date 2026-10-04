@@ -1,0 +1,26 @@
+defaults:
+  model: study_model
+  timeout: 120
+  max_tool_calls: 6
+  max_steps: 24
+profiles:
+  ask:
+    workflow: course_qa
+    prompt: prompts/course-qa.md
+    tools: [list_documents, search_documents, read_pages, search_notes, terminology]
+    skills: [course-concepts]
+  translate:
+    workflow: direct_translation
+    prompt: prompts/translate.md
+    tools: []
+    skills: []
+  explain:
+    workflow: contextual_explanation
+    prompt: prompts/explain.md
+    tools: [search_documents, read_pages, terminology]
+    skills: [course-concepts]
+  summary:
+    workflow: page_summary
+    prompt: prompts/summary.md
+    tools: []
+    skills: []

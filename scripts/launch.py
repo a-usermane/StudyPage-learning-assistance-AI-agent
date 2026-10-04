@@ -16,7 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
-    for module in ("fastapi", "uvicorn", "multipart", "pypdf", "pptx"):
+    for module in ("fastapi", "uvicorn", "multipart", "pypdf", "pptx", "deepagents", "langchain_openai", "yaml", "mcp"):
         if importlib.util.find_spec(module) is None:
             raise RuntimeError(f"Missing {module}. Run setup.cmd first.")
     for asset in ("build/pdf.mjs", "build/pdf.worker.mjs", "web/pdf_viewer.mjs", "web/pdf_viewer.css"):
@@ -46,7 +46,7 @@ def main():
         print("Browser not opened: health check timed out. Inspect the log.")
     if not args.no_browser:
         threading.Thread(target=open_when_ready, daemon=True).start()
-    print("Study Local: http://127.0.0.1:8000 | Demo only, no AI connected | Ctrl+C to stop", flush=True)
+    print("StudyPage: http://127.0.0.1:8000 | Agent mode follows local configuration | Ctrl+C to stop", flush=True)
     import uvicorn
     from copy import deepcopy
     from uvicorn.config import LOGGING_CONFIG

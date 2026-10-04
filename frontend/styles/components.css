@@ -82,3 +82,13 @@ dialog::backdrop {background: #233f3933; backdrop-filter: blur(2px);}
   .popup-answer {max-height: 180px;}
   .popup-actions button {font-size: 11px; padding: 7px;}
 }
+.agent-status { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 760px; font: inherit; line-height: 1.7; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+#settings-page > label { display: block; margin: 20px 0; }
+#settings-page > button { margin-right: 8px; }
+.agent-key-form {max-width: 600px; margin: 24px 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fafcfb;}
+.agent-key-form h2 {font-size: 17px; margin: 0 0 18px;}
+.agent-key-form .field {display: flex; flex-direction: column; gap: 8px; margin: 14px 0;}
+.agent-key-form select {width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px;}
+.agent-key-form input {width: 100%; box-sizing: border-box;}
+.agent-key-form small {display: block; margin-top: 14px; color: #75877e; line-height: 1.7;}
+.agent-key-hint {font-size: 13px; color: #75877e;}

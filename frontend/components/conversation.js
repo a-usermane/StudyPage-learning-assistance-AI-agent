@@ -20,6 +20,7 @@ export class Conversation {
   sourceButton(source) {
     const button = node('button', 'source-button', source.document_id
       ? `↗ ${source.name} · ${locationLabel(source)}` : `${source.name} · 原资料已删除`);
+    if (source.document_id && source.line_start) button.textContent = '↗ ' + source.name + ' · 第 ' + source.line_start + '–' + source.line_end + ' 行';
     button.disabled = !source.document_id;
     button.onclick = () => this.onSource(source).catch(error => notify(error.message, true));
     return button;
@@ -47,10 +48,11 @@ export class Conversation {
     for (const message of messages) {
       const article = node('article', 'message ' + message.role);
       article.append(node('div', 'role', message.role === 'user' ? '你' : '课程书桌'));
-      if (message.role === 'assistant') article.append(node('span', 'demo-badge', '演示模式，未连接 AI'));
+      if (message.role === 'assistant' && message.mode === 'demo') article.append(node('span', 'demo-badge', '演示模式，未连接 AI'));
       article.append(node('div', 'message-body', message.content));
       const actions = node('div', 'message-actions');
-      actions.append(this.sourceButton(message));
+      const citations = message.citations?.length ? message.citations : (message.document_id || message.name !== '课程问答' ? [message] : []);
+      for (const citation of citations) actions.append(this.sourceButton(citation));
       if (message.role === 'assistant') {
         const save = node('button', 'quiet', '保存为笔记');
         save.disabled = !message.document_id;
@@ -59,7 +61,7 @@ export class Conversation {
           try {
             await post(coursePath(id, 'notes'), {document_id: message.document_id,
               page_start: message.page_start, page_end: message.page_end,
-              selected_text: message.selected_text, body: message.content, demo: true});
+              selected_text: message.selected_text, body: message.content, demo: message.mode === 'demo'});
             if (this.courseId === id) await this.refreshNotes();
             notify('已保存为笔记。');
           } catch (error) { notify(error.message, true); }

@@ -9,7 +9,7 @@ import sqlite3
 
 from backend.domain.models import StudyError, default_category, new_id, now
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA = """
 CREATE TABLE courses (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','ready')), created_at TEXT NOT NULL);
@@ -81,7 +81,7 @@ def initialize(data_dir):
     manifest_path = backup / "manifest.json"
     if target.exists():
         with connection(target) as db:
-            if db.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_VERSION:
+            if db.execute("PRAGMA user_version").fetchone()[0] not in {1, SCHEMA_VERSION}:
                 raise RuntimeError("数据库版本不兼容；请保留数据并检查程序版本。")
         if marker.exists() and manifest_path.exists():
             _archive_legacy(data_dir, backup)
@@ -92,8 +92,10 @@ def initialize(data_dir):
         staged.unlink(missing_ok=True)
         create_schema(staged)
         with connection(staged) as db:
-            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+            db.execute("PRAGMA user_version=1")
         staged.replace(target)
+    from backend.dp.agent_storage import migrate_agent_schema
+    migrate_agent_schema(target, data_dir)
     with connection(target) as db:
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("DELETE FROM courses WHERE status='pending' AND NOT EXISTS (SELECT 1 FROM documents WHERE course_id=courses.id)")
@@ -168,7 +170,7 @@ def migrate_legacy(data_dir, target, backup):
                 raise RuntimeError("迁移记录数量校验失败。")
         if destination.execute("PRAGMA foreign_key_check").fetchall():
             raise RuntimeError("迁移外键校验失败。")
-        destination.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        destination.execute("PRAGMA user_version=1")
     (target.parent / "migration.json").write_text(json.dumps({"version": 1, "backup": "legacy-v1"}), encoding="utf-8")
     staged.replace(target)
     _archive_legacy(data_dir, backup)
@@ -221,6 +223,8 @@ class SQLiteLibraryRepository:
             _insert(db, "documents", asdict(document))
             db.executemany("INSERT INTO pages VALUES (?,?,?)", [(document.id, i, text) for i, text in enumerate(pages, 1)])
             db.execute("UPDATE courses SET status='ready' WHERE id=?", (document.course_id,))
+            from backend.dp.retrieval import index_document
+            index_document(db, document.id)
         return asdict(document)
 
     def page_text(self, document_id, start, end):
@@ -234,7 +238,16 @@ class SQLiteLibraryRepository:
     def messages(self, course_id):
         self.course(course_id)
         with connection(self.path) as db:
-            return [dict(row) for row in db.execute("SELECT * FROM messages WHERE course_id=? ORDER BY created_at,rowid", (course_id,))]
+            import json
+            messages = [dict(row) for row in db.execute("SELECT * FROM messages WHERE course_id=? ORDER BY created_at,rowid", (course_id,))]
+            for message in messages:
+                metadata = db.execute("SELECT * FROM agent_messages WHERE message_id=?", (message["id"],)).fetchone()
+                message["mode"] = metadata["mode"] if metadata else "demo"
+                message["citations"] = json.loads(metadata["citations"]) if metadata else []
+                for citation in message["citations"]:
+                    if not db.execute("SELECT 1 FROM documents WHERE id=?",(citation["document_id"],)).fetchone():
+                        citation["document_id"] = None
+            return messages
 
     def add_messages(self, messages):
         with connection(self.path) as db:

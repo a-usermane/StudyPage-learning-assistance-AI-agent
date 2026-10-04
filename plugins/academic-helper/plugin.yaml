@@ -1,0 +1,7 @@
+id: academic-helper
+version: 1.0.0
+enabled: true
+skills: [course-concepts]
+mcp: [terminology]
+# 插件可以提供 profiles 覆盖；名称冲突会单独禁用该插件。
+profiles: {}

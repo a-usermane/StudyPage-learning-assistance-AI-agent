@@ -1,21 +1,21 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>课程书桌 · 本地学习空间</title>
-<link rel="stylesheet" href="/static/vendor/pdfjs/web/pdf_viewer.css"><link rel="stylesheet" href="/static/style.css?v=5">
-<script type="module" src="/static/app.js?v=5"></script></head>
+<link rel="stylesheet" href="/static/vendor/pdfjs/web/pdf_viewer.css"><link rel="stylesheet" href="/static/style.css?v=6">
+<script type="module" src="/static/app.js?v=6"></script></head>
 <body>
 <header class="topbar"><nav aria-label="顶部菜单">
 <details class="menu"><summary>文件</summary><div class="menu-items"><button data-command="new">新建课程</button><button data-command="add">在此项目中添加资料</button></div></details>
 <details class="menu"><summary>编辑</summary><div class="menu-items"><button data-command="copy">复制选中文字</button><button data-command="clear">清空未发送输入</button></div></details>
 <details class="menu"><summary>视图</summary><div class="menu-items"><button data-command="menu">显示 / 隐藏课程菜单</button><button data-command="swap">交换对话与资料</button><button data-command="fit">适合宽度</button></div></details>
 <details class="menu"><summary>帮助</summary><div class="menu-items"><button data-command="help">使用说明</button><button data-command="demo">演示模式说明</button></div></details>
-</nav><span class="top-title">课程书桌</span><span class="demo-badge">演示模式，未连接 AI</span></header>
+</nav><span class="top-title">课程书桌</span><span id="agent-mode-label" class="demo-badge">演示模式，未连接 AI</span></header>
 <div class="app-shell" id="app-shell">
 <aside class="icon-sidebar" aria-label="导航"><button id="home-button" class="icon-button" title="回到起始页" aria-label="回到起始页">⌂</button><button id="plugins-button" class="icon-button" title="插件自定义 · 暂未实现" aria-label="插件自定义，暂未实现">◇</button><button id="menu-button" class="icon-button" title="课程菜单" aria-label="展开课程菜单" aria-expanded="true">☰</button><div class="sidebar-spacer"></div><button id="settings-button" class="icon-button" title="设置" aria-label="设置">⚙</button></aside>
-<div id="content-frame" class="content-frame"><div id="course-menu-slot" class="course-menu-slot"><aside id="course-menu" class="course-menu" aria-label="课程菜单"><div class="course-menu-header"><span>课程</span><button id="menu-close" class="quiet" aria-label="收起课程菜单">×</button></div><button id="menu-new" class="new-course">＋ 新建课程</button><div id="course-list" class="course-list"></div><div class="menu-footer">本机保存 · 无需外部服务</div></aside>
+<div id="content-frame" class="content-frame"><div id="course-menu-slot" class="course-menu-slot"><aside id="course-menu" class="course-menu" aria-label="课程菜单"><div class="course-menu-header"><span>课程</span><button id="menu-close" class="quiet" aria-label="收起课程菜单">×</button></div><button id="menu-new" class="new-course">＋ 新建课程</button><div id="course-list" class="course-list"></div><div class="menu-footer">资料本机保存 · AI 可选</div></aside>
 </div><button id="drawer-backdrop" class="drawer-backdrop" aria-label="关闭课程菜单" hidden></button>
 <main class="main-content">
-<section id="home-page" class="home-page"><div class="home-center"><span class="eyebrow">你的本地学习空间</span><h1>从一门课程开始</h1><p>整理资料，边读边问，留下自己的理解。</p><div class="home-options"><button id="existing-courses"><span class="option-icon">▤</span><strong>查看已有课程</strong><small>继续阅读与学习</small></button><button id="home-new"><span class="option-icon">＋</span><strong>新建课程</strong><small>命名课程并导入资料</small></button></div><div id="home-course-list" class="home-course-list" hidden></div><p class="home-hint">资料和笔记保存在本机。回答仅用于演示交互。</p></div></section>
+<section id="home-page" class="home-page"><div class="home-center"><span class="eyebrow">你的本地学习空间</span><h1>从一门课程开始</h1><p>整理资料，边读边问，留下自己的理解。</p><div class="home-options"><button id="existing-courses"><span class="option-icon">▤</span><strong>查看已有课程</strong><small>继续阅读与学习</small></button><button id="home-new"><span class="option-icon">＋</span><strong>新建课程</strong><small>命名课程并导入资料</small></button></div><div id="home-course-list" class="home-course-list" hidden></div><p class="home-hint">资料和笔记保存在本机。AI 模式按需发送相关文本。</p></div></section>
 <section id="settings-page" class="settings-page" hidden><span class="eyebrow">偏好设置</span><h1>设置</h1><p>设置页面暂未实现。阅读布局与划词翻译开关会自动记住。</p><button id="settings-home" class="quiet">返回起始页</button></section>
 <section id="course-page" class="course-page" hidden>
 <div class="mobile-panes"><button data-pane="chat">对话</button><button data-pane="reader">资料</button></div>

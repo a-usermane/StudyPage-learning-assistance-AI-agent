@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "terminology": {
+      "enabled": true,
+      "transport": "stdio",
+      "command": "{python}",
+      "args": ["{root}/examples/terminology_mcp.py"],
+      "tools": ["lookup_term"]
+    }
+  }
+}

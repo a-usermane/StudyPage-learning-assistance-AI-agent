@@ -56,23 +56,24 @@ export class SelectionPopup {
     $('popup-quote').textContent = source.selected_text;
     $('popup-quote-summary').textContent = '原文 · ' + source.selected_text.replace(/\s+/g, ' ').slice(0, 44);
     const displayContent = content => content?.replace(/^演示模式，未连接 AI\s*/, '') || '';
-    $('popup-answer').textContent = current.status === 'loading' ? '正在读取本地演示内容…'
+    $('popup-answer').textContent = current.status === 'loading' ? (current.progress || '正在生成回复…')
       : current.error || (isNote ? [displayContent(result?.content), session.tabs.note.draft].filter(Boolean).join('\n\n我的笔记：\n')
         || '将所选原文保存下来，也可以补充自己的理解。'
       : displayContent(current.result?.content) || '点击下方输入框，提出关于这段内容的问题。');
     $('popup-answer').classList.toggle('is-hint', !result && !current.error);
     $('popup-answer').setAttribute('aria-busy', String(current.status === 'loading'));
-    $('popup-demo').hidden = !result && current.status !== 'loading';
+    $('popup-demo').hidden = (current.status === 'loading' ? current.mode : result?.mode) !== 'demo';
     $('popup-retry').hidden = current.status !== 'error';
-    $('popup-source').replaceChildren(this.handlers.sourceButton(result?.citation || {...source, name: this.handlers.fileName()}));
+    const citations = result?.citations?.length ? result.citations : [result?.citation || {...source, name: this.handlers.fileName()}];
+    $('popup-source').replaceChildren(...citations.map(item => this.handlers.sourceButton(item)));
     $('popup-attach').hidden = !isNote || !session.noteReplyAction;
     $('popup-include-reply').checked = session.includeReply;
-    $('popup-attach-label').textContent = '附带已有' + (titles[session.noteReplyAction] || '') + '回复（演示内容）';
+    $('popup-attach-label').textContent = '附带已有' + (titles[session.noteReplyAction] || '') + '回复';
     $('popup-question-snapshot').hidden = action !== 'ask' || !current.result;
     $('popup-question-snapshot').textContent = '问题：' + current.question;
     this.input.render({expanded: current.expanded, isNote, value: current.draft, placeholder: prompts[action], busy});
     $('popup-include-reply').disabled = session.saving;
-    $('popup-submit').textContent = isNote ? '保存笔记' : '查看演示回复';
+    $('popup-submit').textContent = isNote ? '保存笔记' : '发送';
     $('popup-submit').disabled = busy;
     $('popup-save').disabled = busy; $('popup-save').textContent = session.saving ? '保存中…' : '保存笔记';
     $('popup-transfer').hidden = isNote; $('popup-transfer').disabled = !current.result || busy;

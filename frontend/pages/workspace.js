@@ -1,5 +1,5 @@
 import {$, node, notify, categories, locationLabel} from '../shared/dom.js';
-import {api, post, coursePath} from '../services/client.js';
+import {api, post, coursePath, runAgent} from '../services/client.js';
 import {state, preference, remember} from '../state/store.js';
 import {createReader} from '../readers/index.js';
 import {Conversation} from '../components/conversation.js';
@@ -13,6 +13,9 @@ export class Workspace {
     this.conversation = new Conversation(source => this.goSource(source));
     this.selection = new SelectionTools(this.conversation, (...args) => this.send(...args));
     this.composerInput = new AutoGrowInput($('question'), {min: 26});
+    this.stopButton = node('button', 'quiet', '停止'); this.stopButton.type = 'button'; this.stopButton.hidden = true;
+    this.stopButton.onclick = () => this.chatAbort?.abort();
+    document.querySelector('.composer-footer').append(this.stopButton);
     document.addEventListener('composerchange', () => this.composerInput.resize());
     $('document-select').onchange = () => this.loadDocument($('document-select').value).catch(error => notify(error.message, true));
     $('translation-toggle').checked = state.translation;
@@ -26,6 +29,7 @@ export class Workspace {
     $('delete-document').onclick = () => this.deleteDocument();
   }
   async load(courseId, preferredDocument) {
+    this.chatAbort?.abort();
     const ticket = ++this.version;
     this.documentVersion++;
     this.selection.clear();
@@ -115,10 +119,12 @@ export class Workspace {
   controls() {
     const ready = Boolean(state.document && state.reader?.ready && !state.reader.destroyed);
     for (const id of ['zoom-in', 'zoom-out', 'fit-width', 'summary', 'delete-document', 'translation-toggle']) $(id).disabled = !ready;
-    $('question').disabled = !ready;
-    $('send').disabled = !ready || state.chatBusy;
+    const canChat = Boolean(state.course && (!state.document || ready));
+    $('question').disabled = !canChat;
+    $('send').disabled = !canChat || state.chatBusy;
+    this.stopButton.hidden = !state.chatBusy;
     $('send').textContent = state.chatBusy ? '处理中…' : '发送';
-    if (!ready) $('context-label').textContent = '先选择一份课程资料';
+    if (!ready) $('context-label').textContent = state.course ? '当前课程全部资料' : '先选择课程';
     document.dispatchEvent(new Event('workspacechange'));
   }
   zoom(value) {
@@ -135,21 +141,42 @@ export class Workspace {
     else await this.loadDocument(source.document_id, source);
   }
   async send(action, question = '', selection = null) {
-    if (!state.course || !state.document || !state.reader?.ready || state.chatBusy) return;
+    if (!state.course || (state.document && !state.reader?.ready) || state.chatBusy) return;
     if (action === 'ask' && !question.trim()) return notify('请输入问题。', true);
     const courseId = state.course.id;
-    const location = selection || {...state.reader.getVisibleLocation(), document_id: state.document.id, selected_text: ''};
+    const location = selection || (state.document ? {...state.reader.getVisibleLocation(), document_id: state.document.id, selected_text: ''} : {document_id: null, page_start: 1});
     const source = {document_id: location.document_id, page_start: location.page_start, page_end: location.page_end, selected_text: location.selected_text || ''};
     const input = $('question').value;
+    this.chatAbort = new AbortController(); const controller = this.chatAbort;
+    const article = node('article', 'message assistant');
+    const progress = node('div', 'muted', '正在生成…'), body = node('div', 'message-body', '');
+    article.append(node('div', 'role', question || (action === 'summary' ? '总结当前页' : '课程问题')), progress, body);
+    $('messages').append(article);
     state.chatBusy = true; this.controls(); this.conversation.tab('chat');
     try {
-      await post(coursePath(courseId, 'messages'), {...source, action, question});
+      const result = await runAgent(courseId, {...source, action, question, persist: true, mode: state.agentMode}, {
+        signal: controller.signal, onEvent: event => {
+          if (state.course?.id !== courseId || controller.signal.aborted) return;
+          if (event.type === 'delta') body.textContent += event.data.text;
+          if (event.type === 'tool') progress.textContent = '正在调用：' + event.data.name;
+          if (event.type === 'start') progress.textContent = event.data.mode === 'demo' ? '演示模式，未连接 AI' : '正在生成…';
+          $('messages').scrollTop = $('messages').scrollHeight;
+        }
+      });
       if (state.course?.id === courseId) {
         await this.conversation.refreshHistory();
         if ($('question').value === input) this.composerInput.setValue('');
       }
-    } catch (error) { notify(error.message, true); }
-    finally { state.chatBusy = false; this.controls(); }
+    } catch (error) {
+      if (error.name === 'AbortError') { progress.textContent = '生成已停止，未保存未完成回复。'; }
+      else {
+        progress.textContent = error.message; notify(error.message, true);
+        const retry = node('button', 'quiet', '重试');
+        retry.onclick = () => { article.remove(); this.send(action, question, location); };
+        article.append(retry);
+      }
+    }
+    finally { if (this.chatAbort === controller) { state.chatBusy = false; this.controls(); } }
   }
   async deleteDocument() {
     const doc = state.document;
@@ -165,6 +192,7 @@ export class Workspace {
     } catch (error) { notify(error.message, true); if (ticket === this.version && state.course?.id === doc.course_id) await this.loadDocument(doc.id); }
   }
   async leave() {
+    this.chatAbort?.abort();
     const ticket = ++this.version; this.documentVersion++;
     this.selection.clear(); this.conversation.clear();
     await this.releaseReader();

@@ -1,5 +1,5 @@
 import {$, notify, positionFloating} from '../shared/dom.js';
-import {post, coursePath} from '../services/client.js';
+import {post, coursePath, runAgent} from '../services/client.js';
 import {state} from '../state/store.js';
 import {SelectionSession} from './selection-state.js';
 import {SelectionPopup} from './selection-popup.js';
@@ -36,6 +36,7 @@ export class SelectionTools {
     this.abort?.abort();
     if (this.popup) for (const tab of Object.values(this.popup.tabs)) {
       if (tab.status === 'loading') tab.status = tab.result ? 'ready' : 'idle';
+      tab.progress = '';
     }
   }
   clear() {
@@ -75,10 +76,6 @@ export class SelectionTools {
     if (this.popup.action === 'note') return this.save();
     const question = this.popup.current.draft.trim();
     if (!question) return notify('请输入问题。', true);
-    if (this.popup.action !== 'ask') {
-      this.cancelRequest(); this.popup.switch('ask');
-      this.popup.current.draft = question; this.popup.current.expanded = true;
-    }
     this.request(question);
   }
   async request(question = this.popup?.current.draft.trim() || '') {
@@ -88,11 +85,16 @@ export class SelectionTools {
     if (action === 'ask' && !question) return notify('请输入问题。', true);
     this.cancelRequest(); this.abort = new AbortController();
     const controller = this.abort, tab = popup.current;
-    tab.status = 'loading'; tab.error = ''; this.render();
+    tab.status = 'loading'; tab.error = ''; tab.progress = ''; this.render();
     const {rect, ...source} = popup.source;
     try {
-      const result = await post('/api/demo', {course_id: popup.courseId, ...source, action,
-        question: action === 'ask' ? question : ''}, {signal: controller.signal});
+      const result = await runAgent(popup.courseId, {...source, action, question,
+        session_id: popup.sessionId, persist: false, mode: state.agentMode}, {signal: controller.signal,
+        onEvent: event => {
+          if (this.popup !== popup || controller.signal.aborted || popup.action !== action) return;
+          if (event.type === 'start') tab.mode = event.data.mode;
+          if (event.type === 'delta') { tab.progress += event.data.text; this.render(); }
+        }});
       if (this.popup !== popup || controller.signal.aborted || popup.action !== action) return;
       popup.complete(action, result, question);
     } catch (error) {
@@ -109,8 +111,12 @@ export class SelectionTools {
   async transfer() {
     const popup = this.popup;
     if (!popup?.current.result) return;
-    const action = popup.action, question = popup.current.question;
-    this.clear(); await this.sendMessage(action, question, popup.source);
+    try {
+      await post(coursePath(popup.courseId, 'agent/runs/' + popup.current.result.run_id + '/transfer'), {});
+      this.clear(); this.conversation.tab('chat');
+      await this.conversation.refreshHistory();
+      notify('已转入主对话，没有重复生成。');
+    } catch (error) { notify(error.message, true); }
   }
   async save() {
     const popup = this.popup;

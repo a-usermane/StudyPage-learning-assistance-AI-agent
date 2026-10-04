@@ -6,6 +6,7 @@ import {Workspace} from './pages/workspace.js';
 import {renderHomeCourses} from './pages/home.js';
 import {Shell} from './components/shell.js';
 import {UploadDialog} from './components/uploads.js';
+import {installAgentSettings, refreshAgentStatus} from './services/agent-settings.js';
 
 const openCourse = id => { location.hash = '#/courses/' + encodeURIComponent(id); };
 let routeVersion = 0;
@@ -62,6 +63,8 @@ async function route() {
 window.addEventListener('hashchange', route);
 (async () => {
   try {
+    installAgentSettings();
+    await refreshAgentStatus();
     const health = await api('/api/health');
     state.uploadLimit = health.upload_limit;
     await refreshCourses();

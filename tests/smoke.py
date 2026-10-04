@@ -41,7 +41,7 @@ def main():
     health = request('/api/health')
     data_dir = Path(health['data_dir']).resolve()
     assert data_dir.is_relative_to(ROOT / '.cache'), 'Run tests/offline_check.py to isolate test records from your library.'
-    assert health['mode'] == 'demo' and health['schema_version'] == 1
+    assert health['mode'] == 'demo' and health['schema_version'] == 2
     course = request('/api/courses', {'name': 'API 验证课程'}, 'POST', 201)
     cid = course['id']
     cp = '/api/courses/' + cid

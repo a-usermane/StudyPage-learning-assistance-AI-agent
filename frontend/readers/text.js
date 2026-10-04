@@ -71,7 +71,11 @@ export class TextReader extends ReaderBase {
     const article = this.element.querySelector(`[data-page-number="${source.page_start || 1}"]`);
     if (!article) return;
     this.container.scrollTop = article.offsetTop + (source.offset || 0) * article.offsetHeight;
-    this.loadPage(article);
+    this.loadPage(article).then(() => {
+      if (this.destroyed || !source.line_start) return;
+      const line = article.querySelectorAll('.code-line')[Math.max(0,source.line_start-1)];
+      if (line) this.container.scrollTop += line.getBoundingClientRect().top-this.container.getBoundingClientRect().top;
+    });
   }
   setZoom(value) {
     const location = this.getVisibleLocation();

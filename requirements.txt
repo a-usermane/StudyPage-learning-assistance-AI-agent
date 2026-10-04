@@ -3,3 +3,10 @@ uvicorn==0.54.0
 python-multipart==0.0.32
 pypdf==6.19.0
 python-pptx==1.0.2
+
+deepagents==0.7.21
+langchain-openai==1.6.7
+langgraph-checkpoint-sqlite==3.1.1
+langchain-mcp-adapters==0.3.2
+PyYAML==6.0.3
+python-dotenv==1.2.4
