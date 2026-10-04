@@ -1,11 +1,22 @@
 import {$, notify, positionFloating} from '../shared/dom.js';
 import {post, coursePath} from '../services/client.js';
 import {state} from '../state/store.js';
+import {SelectionSession} from './selection-state.js';
+import {SelectionPopup} from './selection-popup.js';
 
+// Captures sources and coordinates transport. The view and session own presentation/state.
 export class SelectionTools {
   constructor(conversation, sendMessage) {
-    this.conversation = conversation;
-    this.sendMessage = sendMessage;
+    this.conversation = conversation; this.sendMessage = sendMessage;
+    this.view = new SelectionPopup({
+      switch: action => this.open(action), close: () => this.clear(),
+      expand: () => this.expand(), collapse: () => this.collapse(),
+      draft: value => { if (this.popup) this.popup.current.draft = value; },
+      includeReply: include => { if (this.popup) { this.popup.includeReply = include; this.render(); } },
+      submit: () => this.submit(), retry: () => this.request(),
+      copy: () => this.copy(), save: () => this.save(), transfer: () => this.transfer(),
+      sourceButton: source => conversation.sourceButton(source), fileName: () => state.document?.name || ''
+    });
     document.addEventListener('pointerup', event => {
       if ($('viewer').contains(event.target)) setTimeout(() => this.capture(), 0);
     });
@@ -15,98 +26,102 @@ export class SelectionTools {
       if (!$('viewer').contains(event.target) && !$('selection-toolbar').contains(event.target) && !$('selection-popup').contains(event.target)
           && !event.target.closest('.menu')) this.clear();
     });
+    document.addEventListener('layoutstart', () => this.clear());
+    window.addEventListener('resize', () => this.clear());
     $('reader-surface').addEventListener('scroll', () => this.clear(), {passive: true});
     $('selection-toolbar').onpointerdown = event => event.preventDefault();
-    for (const button of document.querySelectorAll('[data-selection-action]')) {
-      button.onclick = () => this.open(button.dataset.selectionAction);
+    for (const button of document.querySelectorAll('[data-selection-action]')) button.onclick = () => this.open(button.dataset.selectionAction);
+  }
+  cancelRequest() {
+    this.abort?.abort();
+    if (this.popup) for (const tab of Object.values(this.popup.tabs)) {
+      if (tab.status === 'loading') tab.status = tab.result ? 'ready' : 'idle';
     }
-    $('popup-close').onclick = () => this.clear();
-    $('popup-form').onsubmit = event => {
-      event.preventDefault();
-      if (!this.popup) return;
-      this.popup.question = $('popup-question').value.trim();
-      if (!this.popup.question) return notify('请输入问题。', true);
-      this.request();
-    };
-    $('popup-save').onclick = () => this.save();
-    $('popup-transfer').onclick = async () => {
-      const popup = this.popup;
-      if (!popup?.result) return;
-      this.clear();
-      await this.sendMessage(popup.action, popup.question, popup.source);
-    };
   }
   clear() {
-    this.abort?.abort();
-    this.popup = this.selection = null;
-    $('selection-toolbar').hidden = $('selection-popup').hidden = true;
+    this.cancelRequest(); this.popup = this.selection = null;
+    $('selection-toolbar').hidden = true; this.view.hide();
   }
   capture() {
     if (!state.reader || !state.course) return;
     const source = state.reader.getSelectionContext();
     if (!source) { this.clear(); return; }
-    if (source.selected_text.length > 5000) return notify('一次最多选择 5000 个字符，请缩小选区。', true);
-    this.clear();
-    this.selection = source;
+    if (source.selected_text.length > 5000) { this.clear(); return notify('一次最多选择 5000 个字符，请缩小选区。', true); }
+    if (this.popup && source.document_id === this.popup.source.document_id && source.selected_text === this.popup.source.selected_text
+        && source.page_start === this.popup.source.page_start && source.page_end === this.popup.source.page_end) return;
+    this.clear(); this.selection = source;
     if (state.translation) this.open('translate');
     else positionFloating($('selection-toolbar'), source.rect);
   }
   open(action) {
-    const source = this.popup?.source || this.selection;
-    if (!source) return;
-    this.abort?.abort();
-    this.popup = {source, action, courseId: state.course.id, result: null, question: ''};
+    if (!this.popup && this.selection) this.popup = new SelectionSession(this.selection, state.course.id);
+    if (!this.popup || this.popup.saving) return;
+    this.cancelRequest(); this.popup.switch(action);
     $('selection-toolbar').hidden = true;
-    $('popup-title').textContent = {translate: '划词翻译', explain: '术语解释', ask: '局部提问', note: '保存笔记'}[action];
-    $('popup-quote').textContent = source.selected_text;
-    $('popup-form').hidden = action !== 'ask';
-    $('popup-question').value = '';
-    $('popup-answer').textContent = '';
-    $('popup-source').replaceChildren();
-    $('note-body').value = '';
-    $('popup-transfer').disabled = true;
-    $('popup-save').disabled = false;
-    positionFloating($('selection-popup'), source.rect);
-    if (action === 'translate' || action === 'explain') this.request();
-    if (action === 'ask') $('popup-question').focus();
-    if (action === 'note') $('note-body').focus();
+    this.render();
+    if (['translate', 'explain'].includes(action) && !this.popup.current.result) this.request();
   }
-  async request() {
-    const popup = this.popup;
-    if (!popup) return;
-    this.abort?.abort();
-    this.abort = new AbortController();
-    const controller = this.abort;
-    const {rect, ...source} = popup.source;
-    $('popup-answer').textContent = '正在读取本地演示内容…';
-    $('popup-save').disabled = $('popup-transfer').disabled = true;
-    try {
-      const result = await post('/api/demo', {course_id: popup.courseId, ...source,
-        action: popup.action, question: popup.question}, {signal: controller.signal});
-      if (this.popup !== popup || controller.signal.aborted) return;
-      popup.result = result;
-      $('popup-answer').textContent = result.content;
-      $('popup-source').replaceChildren(this.conversation.sourceButton(result.citation));
-      $('popup-transfer').disabled = false;
-      positionFloating($('selection-popup'), popup.source.rect);
-    } catch (error) {
-      if (!controller.signal.aborted && this.popup === popup) $('popup-answer').textContent = error.message;
-    } finally {
-      if (this.popup === popup && !controller.signal.aborted) $('popup-save').disabled = false;
+  render() { if (this.popup) this.view.render(this.popup); }
+  expand() {
+    if (!this.popup) return;
+    this.popup.current.expanded = true; this.render(); this.view.input.focus(this.popup.action === 'note');
+  }
+  collapse() {
+    if (!this.popup) return;
+    this.popup.current.expanded = false; this.render(); $('popup-input-entry').focus();
+  }
+  submit() {
+    if (!this.popup || this.popup.saving) return;
+    if (this.popup.action === 'note') return this.save();
+    const question = this.popup.current.draft.trim();
+    if (!question) return notify('请输入问题。', true);
+    if (this.popup.action !== 'ask') {
+      this.cancelRequest(); this.popup.switch('ask');
+      this.popup.current.draft = question; this.popup.current.expanded = true;
     }
+    this.request(question);
+  }
+  async request(question = this.popup?.current.draft.trim() || '') {
+    const popup = this.popup;
+    if (!popup || popup.action === 'note' || popup.saving) return;
+    const action = popup.action;
+    if (action === 'ask' && !question) return notify('请输入问题。', true);
+    this.cancelRequest(); this.abort = new AbortController();
+    const controller = this.abort, tab = popup.current;
+    tab.status = 'loading'; tab.error = ''; this.render();
+    const {rect, ...source} = popup.source;
+    try {
+      const result = await post('/api/demo', {course_id: popup.courseId, ...source, action,
+        question: action === 'ask' ? question : ''}, {signal: controller.signal});
+      if (this.popup !== popup || controller.signal.aborted || popup.action !== action) return;
+      popup.complete(action, result, question);
+    } catch (error) {
+      if (!controller.signal.aborted && this.popup === popup) { tab.status = 'error'; tab.error = error.message; }
+    } finally { if (this.popup === popup && !controller.signal.aborted) this.render(); }
+  }
+  async copy() {
+    if (!this.popup) return;
+    const text = this.popup.action === 'note' ? this.popup.notePayload().body : this.popup.current.result?.content;
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); notify('已复制内容。'); }
+    catch { notify('浏览器未允许复制，请手动选择回复文字复制。', true); }
+  }
+  async transfer() {
+    const popup = this.popup;
+    if (!popup?.current.result) return;
+    const action = popup.action, question = popup.current.question;
+    this.clear(); await this.sendMessage(action, question, popup.source);
   }
   async save() {
     const popup = this.popup;
-    if (!popup) return;
-    const {rect, ...source} = popup.source;
-    const body = [popup.result?.content, $('note-body').value.trim()].filter(Boolean).join('\n\n我的笔记：\n');
-    $('popup-save').disabled = true;
+    if (!popup || popup.saving || popup.current.status === 'loading') return;
+    const payload = popup.notePayload(); popup.saving = true; this.render();
     try {
-      await post(coursePath(popup.courseId, 'notes'), {...source, body, demo: Boolean(popup.result)});
+      await post(coursePath(popup.courseId, 'notes'), payload);
       if (state.course?.id === popup.courseId) await this.conversation.refreshNotes();
       if (this.popup === popup) this.clear();
       notify('笔记已保存在本机。');
     } catch (error) { notify(error.message, true); }
-    finally { $('popup-save').disabled = false; }
+    finally { popup.saving = false; if (this.popup === popup) this.render(); }
   }
 }

@@ -26,7 +26,6 @@ const shell = new Shell({
   getSelection: () => state.reader?.getSelectionContext()?.selected_text || workspace.selection.selection?.selected_text || ''
 });
 let preferredDocument;
-$('add-files').onclick = () => { if (state.course) uploads.open(state.course); };
 $('retry-uploads').onclick = () => {
   if (state.course) uploads.open(state.course, state.failedUploads.get(state.course.id) || []);
 };

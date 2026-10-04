@@ -4,6 +4,7 @@ import {state, preference, remember} from '../state/store.js';
 import {createReader} from '../readers/index.js';
 import {Conversation} from '../components/conversation.js';
 import {SelectionTools} from '../components/selection.js';
+import {AutoGrowInput} from '../components/input.js';
 
 export class Workspace {
   constructor(onCoursesChanged) {
@@ -11,6 +12,8 @@ export class Workspace {
     this.version = this.documentVersion = 0;
     this.conversation = new Conversation(source => this.goSource(source));
     this.selection = new SelectionTools(this.conversation, (...args) => this.send(...args));
+    this.composerInput = new AutoGrowInput($('question'), {min: 26});
+    document.addEventListener('composerchange', () => this.composerInput.resize());
     $('document-select').onchange = () => this.loadDocument($('document-select').value).catch(error => notify(error.message, true));
     $('translation-toggle').checked = state.translation;
     $('translation-toggle').onchange = () => { state.translation = $('translation-toggle').checked; remember('translation', state.translation); this.selection.clear(); };
@@ -106,7 +109,7 @@ export class Workspace {
     $('document-warning').hidden = true;
     $('location-status').textContent = '';
     $('viewer').className = 'textViewer';
-    $('viewer').replaceChildren(node('p', 'empty-state', '这门课程还没有资料。点击“添加资料”继续。'));
+    $('viewer').replaceChildren(node('p', 'empty-state', '这门课程还没有资料。通过“文件 → 在此项目中添加资料”继续。'));
     this.controls();
   }
   controls() {
@@ -143,7 +146,7 @@ export class Workspace {
       await post(coursePath(courseId, 'messages'), {...source, action, question});
       if (state.course?.id === courseId) {
         await this.conversation.refreshHistory();
-        if ($('question').value === input) $('question').value = '';
+        if ($('question').value === input) this.composerInput.setValue('');
       }
     } catch (error) { notify(error.message, true); }
     finally { state.chatBusy = false; this.controls(); }

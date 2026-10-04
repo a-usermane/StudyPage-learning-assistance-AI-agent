@@ -1,9 +1,11 @@
 import {$, node, notify} from '../shared/dom.js';
 import {state, remember} from '../state/store.js';
+import {installNavigationIcons} from '../shared/icons.js';
 
 export class Shell {
   constructor(commands) {
     this.commands = commands;
+    installNavigationIcons();
     $('home-button').onclick = $('settings-home').onclick = () => { location.hash = '#/'; };
     $('settings-button').onclick = () => { location.hash = '#/settings'; };
     $('plugins-button').onclick = () => this.help('插件自定义', '插件功能暂未实现。后续可在这里管理课程学习插件。');
@@ -21,7 +23,7 @@ export class Shell {
         if (command === 'menu') this.toggleMenu();
         if (command === 'swap') { state.swapped = !state.swapped; remember('swapped', state.swapped); this.layout(); }
         if (command === 'fit') commands.fit();
-        if (command === 'clear') $('question').value = '';
+        if (command === 'clear') { $('question').value = ''; document.dispatchEvent(new Event('composerchange')); }
         if (command === 'copy') {
           const selection = commands.getSelection();
           if (selection) { await navigator.clipboard.writeText(selection); notify('已复制所选文字。'); }
@@ -40,7 +42,7 @@ export class Shell {
     });
     for (const button of document.querySelectorAll('[data-pane]')) button.onclick = () => { $('workspace').dataset.mobilePane = button.dataset.pane; };
     this.setupSplitter();
-    this.toggleMenu(state.menuOpen);
+    this.toggleMenu(state.menuOpen, false);
     this.layout();
   }
   help(title, content) {
@@ -48,12 +50,30 @@ export class Shell {
     $('help-body').replaceChildren(node('p', '', content));
     $('help-dialog').showModal();
   }
-  toggleMenu(open = !state.menuOpen) {
+  toggleMenu(open = !state.menuOpen, animate = true) {
+    const frame = $('content-frame'), slot = $('course-menu-slot');
+    clearTimeout(this.menuTimer);
+    const ticket = this.menuTicket = (this.menuTicket || 0) + 1;
+    const motion = animate && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const duration = motion ? 230 : 0;
+    if (motion) document.dispatchEvent(new CustomEvent('layoutstart', {detail: {duration}}));
     state.menuOpen = open; remember('menu-open', open);
-    $('course-menu').hidden = !open;
-    $('drawer-backdrop').hidden = !open;
+    if (!open && $('course-menu').contains(document.activeElement)) $('menu-button').focus();
+    $('course-menu').hidden = false;
+    $('course-menu').inert = !open;
+    $('course-menu').setAttribute('aria-hidden', String(!open));
+    slot.style.transitionDuration = motion ? '' : '0ms';
+    if (open) $('drawer-backdrop').hidden = false;
+    frame.classList.toggle('menu-collapsed', !open);
     $('menu-button').setAttribute('aria-expanded', String(open));
+    $('menu-button').setAttribute('aria-label', open ? '收起课程菜单' : '展开课程菜单');
     $('menu-button').classList.toggle('active', open);
+    const finish = () => {
+      if (ticket !== this.menuTicket) return;
+      $('course-menu').hidden = !open; $('drawer-backdrop').hidden = !open;
+      document.dispatchEvent(new Event('layoutend'));
+    };
+    if (duration) this.menuTimer = setTimeout(finish, duration); else finish();
   }
   showPage(name) {
     for (const page of ['home', 'course', 'settings']) $(`${page}-page`).hidden = page !== name;

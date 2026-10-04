@@ -28,7 +28,7 @@ export class PDFReader extends ReaderBase {
     const initialized = new Promise(resolve => {
       this.events.on('pagesinit', () => {
         this.pdfViewer.scrollMode = components.ScrollMode.VERTICAL;
-        this.pdfViewer.currentScaleValue = 'page-width';
+        this.pdfViewer.currentScaleValue = this.container.clientWidth > 0 ? 'page-width' : '1';
         this.scrollToSource(location);
         resolve();
       });
@@ -48,24 +48,35 @@ export class PDFReader extends ReaderBase {
     this.container.addEventListener('scroll', this.scrollListener, {passive: true});
     this.resize = new ResizeObserver(() => {
       clearTimeout(this.resizeTimer);
+      if (this.layoutChanging) return;
       this.resizeTimer = setTimeout(() => this.resizeToWidth(), 150);
     });
     this.resize.observe(this.container);
+    this.element.ownerDocument.addEventListener('layoutstart', () => {
+      this.layoutChanging = true; this.layoutLocation = this.getVisibleLocation(); clearTimeout(this.resizeTimer);
+    }, {signal: this.abort.signal});
+    this.element.ownerDocument.addEventListener('layoutend', () => {
+      this.layoutChanging = false; this.resizeToWidth(this.layoutLocation); this.layoutLocation = null;
+    }, {signal: this.abort.signal});
     this.onLocation(this.getVisibleLocation());
   }
   getVisibleLocation() {
+    if (this.pendingLocation) return this.pendingLocation;
     return this.locationFor(this.pdfViewer?.currentPageNumber || 1);
   }
   scrollToSource(source) {
     if (!this.pdfViewer?.pdfDocument) return;
+    if (this.container.clientWidth <= 0 || this.container.clientHeight <= 0) { this.pendingLocation = source; return; }
+    this.pendingLocation = null;
     const page = Math.max(1, Math.min(this.document.pages, source.page_start || 1));
     this.pdfViewer.scrollPageIntoView({pageNumber: page});
     const element = this.element.querySelector(`[data-page-number="${page}"]`);
     if (element && source.offset) this.container.scrollTop = element.offsetTop + element.offsetHeight * source.offset;
   }
-  resizeToWidth() {
+  resizeToWidth(savedLocation = null) {
     if (this.destroyed || !this.pdfViewer?.pdfDocument) return;
-    const location = this.getVisibleLocation();
+    if (this.container.clientWidth <= 0 || this.container.clientHeight <= 0) return;
+    const location = savedLocation || this.pendingLocation || this.getVisibleLocation();
     this.pdfViewer.currentScaleValue = 'page-width';
     if (this.zoom !== 1) this.pdfViewer.currentScale = this.pdfViewer.currentScale * this.zoom;
     this.scrollToSource(location);

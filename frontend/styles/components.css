@@ -1,0 +1,84 @@
+.panel-heading, .reader-header {height: 50px; border-color: var(--line);}
+.tab {font-size: 13px; color: #85908d;}
+.tab.active {color: #344b42; border-bottom-color: #79958a;}
+.local-label {font-size: 11px;}
+.messages {padding: 26px 22px;}
+.role {font-size: 12px; color: #8a9591;}
+.message-body, .note-body {font-size: 14px; line-height: 1.85;}
+.message.user .message-body {background: #f1f5f3; border-radius: 14px; padding: 13px 15px;}
+.source-button {font-size: 12px; color: #75877e; padding: 5px 0;}
+.message-actions .quiet {font-size: 12px;}
+.composer {margin: 0 18px 18px; padding: 10px 14px; background: #f8faf9; border: 1px solid #e3eae6; border-radius: 16px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;}
+.composer:focus-within {border-color: #9eb7aa; box-shadow: 0 0 0 3px #7398840d;}
+.context-label {font-size: 12px; color: #8b9590; margin-bottom: 5px;}
+.composer textarea {display: block; font-size: 14px; min-height: 26px; max-height: 180px; line-height: 1.75; padding: 0;}
+.composer textarea:focus-visible {outline: none;}
+.composer-footer small {font-size: 11px;}
+.composer-footer button {font-size: 13px; border-radius: 10px; padding: 7px 13px;}
+.notes-filter {font-size: 13px;}
+.note {padding: 17px 0;}
+.note-footer {font-size: 11px;}
+.file-title strong {font-size: 13px;}
+.file-title select {font-size: 12px; border-radius: 8px;}
+.file-title select:hover {background: #f3f6f5;}
+.reader-toolbar {font-size: 12px; padding: 6px 12px; min-height: 44px; gap: 9px; background: #fbfcfc;}
+.reader-toolbar button {font-size: 12px;}
+.zoom-controls span {font-size: 12px;}
+.translation-switch {padding: 5px 7px; border-radius: 8px;}
+.translation-switch:has(input:checked) {background: #eaf2ee; color: #446959;}
+.reader-body {background: #f0f3f2;}
+.reader-footer {font-size: 11px; color: #8e9993;}
+.text-page {border-radius: 10px; border-color: #e4eae6; box-shadow: 0 2px 8px #2e463606;}
+.plain-text {font-size: 1em;}
+.page-label {font-size: 13px;}
+.selection-toolbar {border-radius: 11px; border-color: #e0e7e3; box-shadow: 0 6px 22px #273e3617;}
+.selection-popup {width: min(370px, calc(100vw - 16px)); padding: 0; display: flex; flex-direction: column;
+  max-height: calc(100dvh - 16px); border-radius: 15px; border-color: #e1e8e4; box-shadow: 0 12px 40px #243b3526; overflow: auto;}
+.popup-header {padding: 9px 10px; gap: 6px; border-bottom: 1px solid #edf1ee; flex-shrink: 0;}
+.popup-tabs {display: flex; flex: 1; position: relative; isolation: isolate; padding: 3px; gap: 3px; background: #f3f6f4; border-radius: 10px;}
+.popup-tabs::before {content: ""; position: absolute; left: 3px; top: 3px; bottom: 3px; width: calc((100% - 15px) / 4); background: white; border-radius: 7px; box-shadow: 0 1px 4px #263b3510; transform: translateX(calc(var(--active-tab, 0) * (100% + 3px))); transition: transform 180ms var(--ease); z-index: -1;}
+.popup-tabs button {flex: 1; border: 0; padding: 6px 8px; font-size: 13px; color: #83908a; border-radius: 7px; transition: color 180ms ease;}
+.popup-tabs button.active {background: transparent; color: #344e41; box-shadow: none; font-weight: 600;}
+.popup-close {font-size: 20px; padding: 3px 6px; color: #8a9690;}
+.popup-panel {min-height: 0;}
+.popup-result {padding: 14px 16px 8px;}
+.popup-answer {font-size: 14px; line-height: 1.8; margin: 9px 0 12px; max-height: 220px; overflow: auto; overscroll-behavior: contain;}
+.popup-answer.is-hint {color: #87918d; font-size: 13px;}
+.popup-question-snapshot {font-size: 12px; color: #84928a; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere;}
+.popup-original {font-size: 12px; color: #8a9690; margin-top: 6px;}
+.popup-original summary {overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; padding: 4px 0;}
+.selection-popup blockquote {font-size: 12px; max-height: 90px; margin: 6px 0;}
+#popup-source .source-button {font-size: 11px;}
+.popup-input {margin: 4px 12px 10px;}
+.input-entry {width: 100%; text-align: left; background: #f7f9f8; color: #919b96; padding: 10px 12px; border-color: #e6ece8;
+  font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 11px;}
+.input-entry:hover {border-color: #cfded5; background: #f2f6f3;}
+.popup-editor {padding: 10px; background: #f8faf9; border: 1px solid #dfe8e2; border-radius: 12px;}
+.popup-editor:focus-within {border-color: #9eb7aa; box-shadow: 0 0 0 2px #7398840a;}
+.selection-popup textarea {font-size: 13px; line-height: 1.8; border: 0; border-radius: 0; padding: 0; background: transparent; resize: none; min-height: 76px; max-height: 150px; outline: none;}
+.popup-editor-footer {display: flex; align-items: center; gap: 6px; margin-top: 8px;}
+.popup-editor-footer span {font-size: 10px; color: #9aa59e; flex: 1;}
+.popup-editor-footer button, #popup-form button {font-size: 12px; margin-top: 0; padding: 5px 8px;}
+.popup-actions {padding: 10px 12px; margin: 0; border-top: 1px solid #edf1ee; gap: 4px; flex-shrink: 0;}
+.popup-actions button {font-size: 12px; padding: 7px 9px; white-space: nowrap;}
+.popup-actions #popup-save {margin-left: auto;}
+.selection-popup .popup-attach {display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 0 16px 12px; color: #859188;}
+.popup-attach input {accent-color: #507a64;}
+dialog {border-radius: 18px; border-color: #e4eae7; box-shadow: 0 18px 70px #203e3826;}
+dialog::backdrop {background: #233f3933; backdrop-filter: blur(2px);}
+.dialog-header h2 {font-size: 20px; font-weight: 600;}
+.field, .upload-picker {font-size: 14px;}
+.field input {background: #fafcfb; border-color: #e2e9e5; border-radius: 11px; padding: 12px;}
+.upload-picker {background: #f8fbf9; border-color: #cddbd2; border-radius: 12px;}
+.upload-filename {font-size: 13px;}
+.upload-detail small, #upload-status {font-size: 12px;}
+.upload-row select {font-size: 12px; border-radius: 8px; padding: 7px;}
+.toast {border-radius: 12px; box-shadow: 0 5px 20px #233c3a20; font-size: 13px;}
+@media (max-width:1100px) {.reader-toolbar {gap: 5px;} .file-title select {max-width: 40%;}}
+@media (max-width:800px) {
+  .composer {margin: 0 12px 12px;} .messages {padding: 22px 17px;}
+  .selection-popup {width: min(370px, calc(100vw - 16px));}
+  .popup-answer {max-height: 180px;}
+  .popup-actions button {font-size: 11px; padding: 7px;}
+}

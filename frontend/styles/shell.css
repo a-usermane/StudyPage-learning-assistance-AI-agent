@@ -1,0 +1,52 @@
+.topbar {height: var(--topbar-height); border: 0; background: var(--chrome); padding: 0 12px 0 48px; gap: 14px;}
+.top-title {font-size: 12px; color: #718082;}
+.menu summary {font-size: 13px; color: #657476; padding: 5px 10px; border-radius: 7px;}
+.menu[open] summary, .menu summary:hover {background: #e0e9ea;}
+.menu-items {border-radius: 12px; border-color: var(--line); padding: 6px; box-shadow: 0 6px 24px #233c4014;}
+.menu-items button {font-size: 13px;}
+.app-shell {height: calc(100dvh - var(--topbar-height)); padding: 0 8px 8px 0; gap: 0;}
+.icon-sidebar {width: var(--sidebar-width); padding: 10px 6px; gap: 12px; border: 0; background: var(--chrome);}
+.icon-button {width: 34px; height: 34px; color: #819092; border-radius: 11px; display: grid; place-items: center;}
+.icon-button:hover {background: #e2ecec;}
+.icon-button.active {background: #dde9e9; color: #2b3838;}
+.content-frame {flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; background: white;
+  border: 1px solid #e2ebed; border-radius: var(--radius-panel); overflow: hidden; box-shadow: 0 2px 10px #324b4e04;}
+.course-menu-slot {width: var(--course-width); flex: 0 0 auto; overflow: hidden;
+  transition: width var(--motion) var(--ease); min-height: 0;}
+.content-frame.menu-collapsed .course-menu-slot {width: 0;}
+.course-menu {height: 100%; width: var(--course-width); border-right: 1px solid var(--line); background: #f7fafb;
+  transition: opacity 150ms ease, transform var(--motion) var(--ease);}
+.content-frame.menu-collapsed .course-menu {opacity: 0; transform: translateX(-10px); pointer-events: none;}
+.course-menu-header {font-size: 13px; padding: 18px 16px 10px; color: #758385;}
+.new-course {background: transparent; margin: 0 9px 12px; padding: 11px 12px; font-size: 14px;}
+.course-list {padding: 0 9px;}
+.course-item {padding: 12px; border-radius: 11px; margin-bottom: 5px;}
+.course-item.active {background: #e9efef;}
+.course-item strong {font-size: 14px; font-weight: 500;}
+.course-item small {font-size: 12px; color: #8a9597;}
+.menu-footer {font-size: 11px; padding: 14px; border: 0;}
+.main-content {background: var(--surface); overflow: hidden;}
+.conversation-title {height: 50px; padding: 0 20px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid var(--line); flex-shrink: 0;}
+.conversation-title h1 {font-size: 14px; font-weight: 600; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+.conversation-title svg {width: 19px; height: 19px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round;}
+.home-center h1 {font-weight: 600; letter-spacing: -.5px;}
+.home-options>button {background: #f8faf9; border-color: #e5ecea; border-radius: 16px; padding: 28px 24px;}
+.home-options>button:hover {background: #f0f5f3; border-color: #cfded8;}
+.home-options small, .home-hint {font-size: 13px;}
+.drawer-backdrop {opacity: 0; transition: opacity var(--motion) ease;}
+@media (max-width:1100px) {.course-menu {width: var(--course-width);}}
+@media (max-width:800px) {
+  .topbar {padding-left: 10px;}
+  .app-shell {padding: 0 5px 5px 0;}
+  .content-frame {border-radius: 13px;}
+  .course-menu-slot {position: absolute; z-index: 30; left: 0; top: 0; bottom: 0; width: var(--course-width); transition: transform var(--motion) var(--ease); box-shadow: 12px 0 25px #2f45441a;}
+  .content-frame.menu-collapsed .course-menu-slot {width: var(--course-width); transform: translateX(-100%); pointer-events: none;}
+  .course-menu {position: static; width: var(--course-width); box-shadow: none;}
+  .content-frame.menu-collapsed .course-menu {transform: none;}
+  .drawer-backdrop:not([hidden]) {display: block; position: absolute; inset: 0; border-radius: 0; background: #253f3c33; z-index: 25;}
+  .content-frame:not(.menu-collapsed) .drawer-backdrop {opacity: 1;}
+  .content-frame.menu-collapsed .drawer-backdrop {opacity: 0; pointer-events: none;}
+  .conversation-title {padding: 0 16px;}
+  .course-page > .mobile-panes {padding: 6px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0;}
+  .home-page {padding: 26px 20px;}
+}

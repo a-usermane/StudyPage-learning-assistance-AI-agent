@@ -1,0 +1,28 @@
+:root {
+  --ink: #303638; --muted: #7b8587; --line: #e8edef; --paper: #f7f9f9;
+  --chrome: #eef5f6; --surface: #ffffff; --accent: #416e63;
+  --radius-panel: 16px; --radius-control: 10px; --sidebar-width: 46px;
+  --topbar-height: 38px; --course-width: 230px; --motion: 200ms;
+  --ease: cubic-bezier(.2,.7,.2,1);
+  font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+}
+body {background: var(--chrome); -webkit-font-smoothing: antialiased;}
+button, input, select, textarea {font: inherit;}
+button {border-radius: var(--radius-control); transition: background 120ms ease, border-color 120ms ease;}
+button:hover {background: #edf2f2;}
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid #789b91; outline-offset: 2px;
+}
+.primary {background: #303c39; border-color: #303c39;}
+.primary:hover {background: #45544f;}
+.demo-badge {font-size: 11px; background: #f5f1e6; color: #857044; padding: 3px 7px; border-radius: 6px;}
+.muted {color: var(--muted);}
+.icon-button svg {width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round;}
+* {scrollbar-width: thin; scrollbar-color: #cbd4d3 transparent;}
+*::-webkit-scrollbar {width: 7px; height: 7px;}
+*::-webkit-scrollbar-thumb {background: #cbd4d3; border: 2px solid transparent; background-clip: padding-box; border-radius: 8px;}
+*::-webkit-scrollbar-track {background: transparent;}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {transition-duration: 0ms !important; animation-duration: 0ms !important; scroll-behavior: auto !important;}
+}
