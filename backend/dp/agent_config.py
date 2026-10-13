@@ -114,7 +114,52 @@ class LocalProfileRegistry:
             self.last_error = None
             return self.status()
 
-    def _load(self, local_secrets=None):
+    def prompt_settings(self):
+        with self._lock:
+            return {"version": self.current.version, "prompts": dict(self.current.prompts)}
+
+    def save_prompt(self, prompt_id, content, expected_version):
+        """Validate a new snapshot before replacing a registered prompt file."""
+        with self._lock:
+            if prompt_id not in self.current.prompts:
+                raise StudyError("提示词类型无效。")
+            if expected_version != self.current.version:
+                raise StudyError("配置已更新，请重新载入提示词后再保存。", 409)
+            if not isinstance(content, str) or not content.strip() or len(content) > 20000 or "\x00" in content:
+                raise StudyError("提示词不能为空，且不能超过 20,000 个字符。")
+            relative = "prompts/base.md" if prompt_id == "base" else self.current.profiles[prompt_id]["prompt"]
+            target = self.path(relative)
+            if not target.is_relative_to(self.path("prompts")) or target.suffix != ".md":
+                raise StudyError("仅允许编辑 prompts 目录中的 Markdown 提示词。")
+            try:
+                if target.read_text(encoding="utf-8") != self.current.prompts[prompt_id]:
+                    raise StudyError("该提示词已在本地文件中修改，请先重载本地配置再重新载入提示词。", 409)
+                candidate = self._load(prompt_overrides={target: content})
+                new_relative = "prompts/base.md" if prompt_id == "base" else candidate.profiles[prompt_id]["prompt"]
+                if self.path(new_relative) != target:
+                    raise StudyError("提示词配置路径已更改，请先重载本地配置。", 409)
+            except StudyError:
+                raise
+            except Exception:
+                raise StudyError("本地配置无效，请修复后再保存；原提示词未更改。") from None
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="", dir=target.parent, prefix=".prompt-", suffix=".tmp", delete=False) as handle:
+                    temporary = Path(handle.name)
+                    handle.write(content)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, target)
+            except OSError:
+                raise StudyError("提示词保存失败，请检查本地文件权限；原提示词未更改。") from None
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+            self.current = candidate
+            self.last_error = None
+            return self.prompt_settings()
+
+    def _load(self, local_secrets=None, prompt_overrides=None):
         model_config = yaml.safe_load(self.read("config/models.yaml"))
         agents = yaml.safe_load(self.read("config/agents.yaml"))
         mcp = json.loads(self.read("config/mcp.json")).get("servers", {})
@@ -192,9 +237,14 @@ class LocalProfileRegistry:
         enabled_skills = (set(skills) - declared_skills) | active_skills
         enabled_mcp = (set(mcp) - declared_mcp) | active_mcp
         self._validate_profiles(profiles, models, skills, mcp)
-        prompts = {"base": self.read("prompts/base.md")}
+        def prompt_text(relative):
+            path = self.path(relative)
+            if prompt_overrides and path in prompt_overrides:
+                return prompt_overrides[path]
+            return self.read(relative)
+        prompts = {"base": prompt_text("prompts/base.md")}
         for name, profile in profiles.items():
-            prompts[name] = self.read(profile["prompt"])
+            prompts[name] = prompt_text(profile["prompt"])
             profile["skills"] = [n for n in profile.get("skills", []) if n in enabled_skills]
         for name, server in mcp.items():
             server["enabled"] = bool(server.get("enabled", False) and name in enabled_mcp)

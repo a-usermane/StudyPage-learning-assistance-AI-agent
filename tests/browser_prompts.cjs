@@ -1,0 +1,51 @@
+// Run prompt_browser_server.py first. Uses isolated prompt files and no model calls.
+const {chromium} = require('../.cache/ui-test/node_modules/playwright');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+(async()=>{
+ const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+ try {
+  const context=await browser.newContext({viewport:{width:1360,height:900}});
+  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('http://127.0.0.1:8003/#/settings');
+  await page.waitForSelector('#prompt-translate:not([disabled])');
+  assert.equal(await page.locator('.prompt-editor textarea').count(),5);
+  const original=await page.inputValue('#prompt-translate');assert.ok(original.includes('翻译'));
+  const modified=original+'\nBrowser persistence test: keep technical terms.';
+  const draft=await page.inputValue('#prompt-ask')+'\nUnsaved QA draft.';
+  await page.fill('#prompt-ask',draft);
+  await page.fill('#prompt-translate',modified);
+  await page.click('#prompt-save-translate');
+  await page.waitForFunction(()=>document.querySelector('#prompt-save-translate').disabled && document.querySelector('#prompt-translate').disabled===false);
+  assert.equal(await page.inputValue('#prompt-ask'),draft);
+  await page.click('#prompt-save-ask');
+  await page.waitForFunction(()=>document.querySelector('#prompt-save-ask').disabled && !document.querySelector('#prompt-ask').disabled);
+  await page.reload();
+  await page.waitForSelector('#prompt-translate:not([disabled])');
+  assert.equal(await page.inputValue('#prompt-translate'),modified);
+  assert.equal(await page.inputValue('#prompt-ask'),draft);
+  await page.fill('#prompt-translate','   ');
+  assert.equal(await page.isDisabled('#prompt-save-translate'),true);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.click('#prompt-refresh');
+  await page.waitForFunction(text=>document.querySelector('#prompt-translate').value===text,modified);
+  const second=await context.newPage();await second.goto('http://127.0.0.1:8003/#/settings');
+  await second.waitForSelector('#prompt-explain:not([disabled])');
+  const explanation=await second.inputValue('#prompt-explain');
+  await second.fill('#prompt-explain',explanation+'\nSecond tab update.');
+  await second.click('#prompt-save-explain');
+  await second.waitForFunction(()=>document.querySelector('#prompt-save-explain').disabled && !document.querySelector('#prompt-explain').disabled);
+  await page.fill('#prompt-explain',explanation+'\nFirst tab stale draft.');
+  await page.click('#prompt-save-explain');
+  await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('配置已更新'));
+  assert.equal(await page.inputValue('#prompt-explain'),explanation+'\nFirst tab stale draft.');
+  const response=await page.request.get('http://127.0.0.1:8003/api/agent/prompts');
+  assert.equal((await response.json()).prompts.explain,explanation+'\nSecond tab update.');
+  page.once('dialog',dialog=>dialog.accept());await page.click('#prompt-refresh');
+  await page.waitForFunction(text=>document.querySelector('#prompt-explain').value===text,explanation+'\nSecond tab update.');
+  await page.locator('#prompt-settings').scrollIntoViewIfNeeded();
+  await page.screenshot({path:path.resolve('.cache/prompt-settings.png'),fullPage:true});
+  assert.deepEqual(errors,[]);
+  console.log('PASS: five populated editors, save/reload persistence, sequential saves preserve other drafts, empty input, stale tab conflict and discard reload');
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exit(1)});

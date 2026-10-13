@@ -92,3 +92,14 @@ dialog::backdrop {background: #233f3933; backdrop-filter: blur(2px);}
 .agent-key-form input {width: 100%; box-sizing: border-box;}
 .agent-key-form small {display: block; margin-top: 14px; color: #75877e; line-height: 1.7;}
 .agent-key-hint {font-size: 13px; color: #75877e;}
+.prompt-settings {max-width: 760px; margin: 30px 0;}
+.prompt-settings h2 {font-size: 18px; margin: 0 0 10px;}
+.prompt-settings > p {font-size: 13px; line-height: 1.8; color: #75877e;}
+.prompt-editor {margin-top: 18px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #fafcfb;}
+.prompt-label {display: block; font-size: 15px; font-weight: 600;}
+.prompt-help, .prompt-load-status {font-size: 12px; line-height: 1.7; color: #75877e;}
+.prompt-editor textarea {display: block; width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px; padding: 12px; border: 1px solid #dfe8e2; border-radius: 10px; background: white; font: inherit; font-size: 13px; line-height: 1.8;}
+.prompt-editor textarea:focus {border-color: #9eb7aa; outline: 2px solid #73988418;}
+.prompt-editor-footer {display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-top: 12px;}
+.prompt-save-state {font-size: 12px; color: #75877e;}
+@media (max-width: 800px) {.prompt-editor {padding: 14px;} .prompt-editor-footer {flex-wrap: wrap;}}

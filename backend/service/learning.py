@@ -23,6 +23,12 @@ class LearningService:
         self.registry.save_api_key(model_id, api_key)
         return self.status()
 
+    def prompt_settings(self):
+        return self.registry.prompt_settings()
+
+    def save_prompt(self, prompt_id, content, expected_version):
+        return self.registry.save_prompt(prompt_id, content, expected_version)
+
     def prepare(self, request):
         if self.closed:
             raise StudyError("服务正在关闭。",503)

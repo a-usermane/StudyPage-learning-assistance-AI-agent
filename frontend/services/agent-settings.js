@@ -1,6 +1,7 @@
 import {$, node, notify} from '../shared/dom.js';
 import {api, post} from './client.js';
 import {state, remember} from '../state/store.js';
+import {installPromptSettings, refreshPromptSettings} from './prompt-settings.js';
 
 export async function refreshAgentStatus() {
   state.agentStatus = await api('/api/agent/status');
@@ -24,7 +25,7 @@ export async function refreshAgentStatus() {
 
 export function installAgentSettings() {
   const section = $('settings-page');
-  section.querySelector('p').textContent = '在此保存 AI API Key；接口地址和模型名称在 config/models.yaml 中修改。提示词和流程可在项目内自定义。';
+  section.querySelector('p').textContent = '在此保存 AI API Key 和修改各功能的系统提示词。接口地址和模型名称在 config/models.yaml 中修改。';
   const form = node('form', 'agent-key-form');
   const title = node('h2', '', 'AI API Key');
   const modelLabel = node('label', 'field', '模型配置');
@@ -64,7 +65,7 @@ export function installAgentSettings() {
   const reload = node('button', 'quiet', '重载本地配置');
   reload.onclick = async () => {
     reload.disabled = true;
-    try { await post('/api/agent/config/reload', {}); await refreshAgentStatus(); notify('配置已重载，新请求将使用新配置。'); }
+    try { await post('/api/agent/config/reload', {}); await refreshAgentStatus(); await refreshPromptSettings(); notify('配置已重载，新请求将使用新配置。'); }
     catch (error) { notify(error.message, true); }
     finally { reload.disabled = false; }
   };
@@ -79,4 +80,5 @@ export function installAgentSettings() {
   const status = node('pre', 'agent-status'); status.id = 'agent-status';
   section.insertBefore(label, $('settings-home')); section.insertBefore(reload, $('settings-home'));
   section.insertBefore(diagnose, $('settings-home')); section.append(status);
+  installPromptSettings(section, $('settings-home'));
 }

@@ -37,6 +37,19 @@ class CredentialRequest(BaseModel):
 def save_credentials(payload: CredentialRequest, request: Request):
     return request.app.state.learning.save_api_key(payload.model_id, payload.api_key.get_secret_value())
 
+class PromptRequest(BaseModel):
+    prompt_id: Literal["base", "ask", "translate", "explain", "summary"]
+    content: str = Field(max_length=20000)
+    expected_version: str
+
+@router.get("/agent/prompts")
+def prompt_settings(request: Request):
+    return request.app.state.learning.prompt_settings()
+
+@router.post("/agent/prompts")
+def save_prompt(payload: PromptRequest, request: Request):
+    return request.app.state.learning.save_prompt(**payload.model_dump())
+
 @router.post("/agent/diagnose")
 async def diagnose(request: Request):
     """Explicit user-triggered paid API diagnostic, never run during startup."""
