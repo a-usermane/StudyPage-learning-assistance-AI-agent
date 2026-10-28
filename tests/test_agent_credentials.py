@@ -68,7 +68,7 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_http_save_no_secret_and_origin_guard(self):
         learning = LearningService(None, self.registry, None, None, None, None, SimpleNamespace(states={}))
-        app = create_app(data_dir=self.root / "data", service=object(), learning=learning)
+        app = create_app(data_dir=self.root / "data", service=object(), learning=learning, overview=SimpleNamespace(close=learning.close))
         async with app.router.lifespan_context(app):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
                 payload = {"model_id": "study_model", "api_key": "test-private-key"}

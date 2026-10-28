@@ -26,7 +26,7 @@ class PromptSettingsTests(unittest.IsolatedAsyncioTestCase):
     def test_all_prompts_roundtrip_version_and_inflight_snapshot(self):
         old=self.registry.snapshot()
         view=self.registry.prompt_settings()
-        self.assertEqual(set(view['prompts']),{'base','ask','translate','explain','summary'})
+        self.assertEqual(set(view['prompts']),{'base','ask','translate','explain','explain_detail','summary','course_overview'})
         original={p.name:p.read_bytes() for p in (self.root/'prompts').glob('*.md')}
         body='翻译为中文，保留术语。\n<script>alert("test")</script>\n'
         result=self.registry.save_prompt('translate',body,view['version'])
@@ -38,9 +38,19 @@ class PromptSettingsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restarted.prompt_settings(),result)
         for name, contents in original.items():
             if name!='translate.md':self.assertEqual((self.root/'prompts'/name).read_bytes(),contents)
-        for prompt_id in ('base','ask','explain','summary'):
+        for prompt_id in ('base','ask','explain','explain_detail','summary','course_overview'):
             result=self.registry.save_prompt(prompt_id,'测试规则：'+prompt_id,result['version'])
         self.assertEqual(LocalProfileRegistry(self.root).prompt_settings(),result)
+        import yaml
+        models_path=self.root/'config/models.yaml'
+        models=yaml.safe_load(models_path.read_text(encoding='utf-8'))
+        models['models']['qa_model']=dict(models['models']['study_model'])
+        models_path.write_text(yaml.safe_dump(models,allow_unicode=True),encoding='utf-8')
+        agents_path=self.root/'config/agents.yaml'
+        agents=yaml.safe_load(agents_path.read_text(encoding='utf-8'))
+        agents['profiles']['ask']['model']='qa_model'
+        agents_path.write_text(yaml.safe_dump(agents,allow_unicode=True),encoding='utf-8')
+        self.assertEqual(LocalProfileRegistry(self.root).snapshot().profiles['course_overview']['model'],'qa_model')
 
     def test_invalid_input_and_stale_version_do_not_write(self):
         before=self.registry.prompt_settings()
@@ -76,15 +86,15 @@ class PromptSettingsTests(unittest.IsolatedAsyncioTestCase):
     async def test_api_fetch_save_no_secrets_and_origin_guard(self):
         self.registry.current.models['study_model']['api_key']='test-private-key'
         learning=LearningService(None,self.registry,None,None,None,None,SimpleNamespace(states={}))
-        app=create_app(data_dir=self.root/'data',service=object(),learning=learning)
+        app=create_app(data_dir=self.root/'data',service=object(),learning=learning,overview=SimpleNamespace(close=learning.close))
         async with app.router.lifespan_context(app):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as client:
                 response=await client.get('/api/agent/prompts'); self.assertEqual(response.status_code,200)
                 self.assertNotIn('test-private-key',response.text)
-                payload={'prompt_id':'ask','content':'按课程资料回答。','expected_version':response.json()['version']}
+                payload={'prompt_id':'explain_detail','content':'详细解释并提供一个小例子。','expected_version':response.json()['version']}
                 response=await client.post('/api/agent/prompts',json=payload)
                 self.assertEqual(response.status_code,200,response.text)
-                self.assertEqual(response.json()['prompts']['ask'],payload['content'])
+                self.assertEqual(response.json()['prompts']['explain_detail'],payload['content'])
                 self.assertNotIn('api_key',response.text)
                 response=await client.post('/api/agent/prompts',json=payload)
                 self.assertEqual(response.status_code,409)

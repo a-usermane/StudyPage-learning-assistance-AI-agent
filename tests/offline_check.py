@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import yaml
 import sys
 import time
 import urllib.request
@@ -10,6 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 environment = os.environ.copy()
 environment['STUDY_DATA_DIR'] = str(ROOT / '.cache/offline-test-data')
 environment['STUDY_TEST_URL'] = 'http://127.0.0.1:8001'
+# Isolate the test from the user's live mode and local credentials.
+fixture = ROOT / '.cache/offline-config'
+for folder in ('config','prompts','skills','plugins','examples'):
+    shutil.copytree(ROOT / folder,fixture / folder,dirs_exist_ok=True)
+model_file = fixture / 'config/models.yaml'
+model_config = yaml.safe_load(model_file.read_text(encoding='utf-8'))
+model_config['mode'] = 'demo'
+model_file.write_text(yaml.safe_dump(model_config,allow_unicode=True),encoding='utf-8')
+environment['STUDY_TEST_CONFIG_ROOT'] = str(fixture)
 environment['TEMP'] = environment['TMP'] = str(ROOT / '.cache/tmp')
 (ROOT / '.cache/tmp').mkdir(parents=True, exist_ok=True)
 bootstrap = '''
@@ -27,7 +38,9 @@ def local_resolve(host, *args, **kwargs):
 socket.socket.connect = local_connect
 socket.getaddrinfo = local_resolve
 import uvicorn
-uvicorn.run('backend.app:app', host='127.0.0.1', port=8001, access_log=False)
+import os
+from backend.app import create_app
+uvicorn.run(create_app(data_dir=os.environ['STUDY_DATA_DIR'],config_root=os.environ['STUDY_TEST_CONFIG_ROOT']), host='127.0.0.1', port=8001, access_log=False)
 '''
 with (ROOT / '.cache/offline-test.log').open('w', encoding='utf-8') as log:
     server = subprocess.Popen([sys.executable, '-c', bootstrap], cwd=ROOT, env=environment, stdout=log, stderr=log)

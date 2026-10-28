@@ -6,7 +6,7 @@
 2. 编辑 config/models.yaml：填写厂商提供的 base_url（通常以 /v1 结尾）和准确模型 ID，将 mode 改为 live。不要把密钥写进 YAML。
 3. 依据实际模型窗口填写 context_window、context_budget 和 output_tokens。默认总预算 16,384，输出 2,048；计数采用保守 UTF-8 字节估计，无需下载 tokenizer。很长的中文选区可能需缩小或提高预算。
 4. 运行 start.cmd，或到设置页点击“重载本地配置”。设置页可跟随文件配置，也可显式选择演示或真实 AI；显式选择会被浏览器记住。
-5. 可点击“测试模型连接”，分别测试普通回答、强制工具调用和流式输出。它会调用真实 API，可能产生少量费用；启动不会自动调用。
+5. 可点击“测试模型连接”，分别测试普通回答、强制工具调用和流式输出。它会调用真实 API，可能产生少量费用；普通启动不会自动调用；真实模式下新课程首批上传结束会自动尝试生成课程概况。
 
 真实请求失败会显示错误，不会切换成演示成功。不同厂商的工具调用、流式和参数兼容性需实测。未提供真实密钥时自动化测试使用模拟模型，无法证明某个厂商的问答质量。
 
@@ -14,7 +14,7 @@
 
 ## 提示词与流程
 
-prompts/base.md 是通用规则，其余四个文件分别负责问答、翻译、解释和当前页总结。修改后重载配置，新请求使用新版本，进行中的请求保留旧快照。无效配置保留旧版本并显示错误。
+prompts/base.md 是通用规则；课程问答、翻译、简短解释、详细解释和当前页总结各有独立模板。课程概况使用 prompts/course-overview.md 独立模板。修改后重载配置，新请求使用新版本，进行中的请求保留旧快照。无效配置保留旧版本并显示错误。
 
 config/agents.yaml 支持选择模型、提示词、已注册流程、工具白名单和 Skill。默认超时 120 秒、最多 6 次业务工具调用、24 个图执行步骤；模型调用另有限制。严格流程由注册模块实现，YAML 不执行任意代码。
 
@@ -68,7 +68,9 @@ plugins/academic-helper/plugin.yaml 提供示例插件。enabled 控制其 Skill
 
 ### 在设置页编辑系统提示词
 
-设置页显示通用规则、课程问答、翻译、解释、总结五份当前提示词。直接编辑文本框并点击对应保存按钮，内容写入本地 prompts Markdown 文件并立即重载，新请求使用更新版本；进行中的生成保持原版本。提示词长期保存，重启后仍可读取。每份提示词最多 20,000 字符且不能为空。
+进入设置页的“提示词管理”栏目（`#/settings/prompts`），可查看通用规则、课程问答、翻译、简短解释、详细解释、总结、课程概况七份当前提示词。API Key、运行模式及连接测试位于“常规设置”栏目。切换栏目保留未保存的提示词草稿，刷新页面会重新读取已保存内容。直接编辑文本框并点击对应保存按钮，内容写入本地 prompts Markdown 文件并立即重载，新请求使用更新版本；进行中的生成保持原版本。提示词长期保存，重启后仍可读取。每份提示词最多 20,000 字符且不能为空。
+
+划词后进入“解释”，默认给出简短定义。点击回复下方“详细解释”，将使用独立的 explain_detail 配置与 prompts/explain-detail.md 重新生成细致讲解，可包含一个小例子和符号说明；不会把简短解释的两句限制带入该会话。之后的追问与重试沿用详细解释；切换弹窗标签会保留当前结果，新选区恢复默认简短解释。详细解释可保存笔记或转入主对话，文件选区检索仅限该文件；消息与笔记选区可按需检索同课程资料。演示模式只返回明确标记的词典内容，不生成假详细回答。
 
 “重新载入提示词”可撤销未保存的编辑；放弃编辑前会提示确认。若其他窗口保存过配置，或文件在编辑器中被修改，保存会提示冲突，避免覆盖新内容；外部文件修改需先重载本地配置，再重新载入提示词。工具权限和课程隔离仍由代码与配置控制。
 
@@ -77,3 +79,26 @@ plugins/academic-helper/plugin.yaml 提供示例插件。enabled 控制其 Skill
 设置页的“AI API Key”区域支持选择模型配置、输入并保存密钥。密钥保存到项目内被 Git 忽略的 `.env.local`，不回显、不存入浏览器；保存后新请求立即使用新密钥，进行中的请求保持原配置。保存不会调用模型 API，也不会自动切换运行模式。
 
 接口地址与模型名称仍在 `config/models.yaml` 配置。保存后可选择“真实 AI”，使用“测试模型连接”进行显式 API 测试。如果系统环境变量已经提供该模型的密钥，页面会提示先移除该变量，避免本地保存被环境变量覆盖。
+
+## 通用选区来源与课程概况扩展
+
+`TextOperationSource` 位于 domain。service/text_sources.py 校验归属、来源和字符位置并截取至多 2,000 字符的局部背景；消息/笔记不会递归展开关联记录或把整段聊天交给模型。前端 services/text-sources.js 提供来源注册表及阅读器、消息、笔记适配器。新增正文只需注册适配器，操作控制器不访问 PDF.js。前端偏移用 Unicode 码点，与 Python 一致。
+
+Agent 运行接口增加 `source`，例如 `{"kind":"message","id":"记录ID","start":0,"end":3,"text_field":"content"}`；note 可选 body 或 selected_text，document 使用 id/page_start/page_end。selected_text 单独传入。旧 document_id/page_start/page_end 继续可用；新旧字段冲突会拒绝。笔记接口同样支持 source，可附完成回复的 run_id 保留其已验证引用；课程、来源和选区必须一致。整条完成回复保存笔记使用 start=end=0、空选区与正文。
+
+每轮在 service 固定概况版本，runtime 使用独立 `<course_context>`、`<local_context>` 和 `<materials>` 块；仅本课程背景可注入，补充说明不直接注入。恢复会话时移除历史请求背景，避免累积多个概况。消息/笔记及课程背景不是引用证据，原始资料仍需经专用工具读取和验证。
+
+课程概况由 service/course_overview.py 协调，dp/overview_store.py 原子保存、版本比对与中断恢复，dp/overview_model.py 通过模型网关执行有预算的分批归纳与合并，不启用 Skill/MCP/自主工具。仅资料指纹、提示词和模型配置版本匹配的批次可复用。唯一内容文件是课程目录中的 context/course-overview.json，不另存 Markdown。
+
+`config/agents.yaml` 的 course_overview 未显式指定模型时跟随课程问答模型；可修改模型、提示词、timeout（默认300秒，最多1800）及 max_model_calls（默认30，最多200）。单批输入保守估计不超过可用预算的一半；默认 JSON 解析与一次修复，可在支持的模型配置上显式填写 structured_output: json_schema。结构或长度校验失败不发布。
+
+接口：
+
+- GET/PUT `/api/courses/{id}/overview`：读取或版本化保存，PUT 必须带 expected_version。
+- POST `/api/courses/{id}/overview/runs`：mode 可选 demo/live；initial=true 表示首批上传后的幂等尝试。
+- GET `/api/courses/{id}/overview/runs/{run_id}`：任务阶段、覆盖及结果状态。
+- POST `/api/courses/{id}/overview/runs/{run_id}/cancel`：停止任务并保留旧概况。
+
+自动测试包含所有新来源、旧库迁移、SSE/API、概况版本冲突、无正文与缺密钥、取消超时、分批覆盖、缓存恢复及提示词保存。浏览器启动隔离的 tests/browser_server.py 后运行 `node tests/browser_text_tools.cjs`；它验证首批部分成功、自动尝试、手动编辑、消息/笔记划词、文件切换后来源不变、来源跳转和窄屏弹窗。
+
+可选真实模型评估：` .venv/Scripts/python.exe scripts/evaluate_text_operations.py --live `。此命令会调用配置的 API、产生费用；默认不执行，自动化测试也不会运行它。合成课程及报告位于 `.cache/evaluations/<批次>/`，报告包含格式合规率、术语准确率和逐项原始结果，需人工复核。它不替换模型回答；失败后应修订提示词并复测。

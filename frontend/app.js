@@ -7,6 +7,7 @@ import {renderHomeCourses} from './pages/home.js';
 import {Shell} from './components/shell.js';
 import {UploadDialog} from './components/uploads.js';
 import {installAgentSettings, refreshAgentStatus} from './services/agent-settings.js';
+import {installSettingsNavigation, showSettings} from './pages/settings.js';
 
 const openCourse = id => { location.hash = '#/courses/' + encodeURIComponent(id); };
 let routeVersion = 0;
@@ -50,7 +51,9 @@ async function route() {
     } else {
       await workspace.leave();
       if (ticket !== routeVersion) return;
-      shell.showPage(hash === '#/settings' ? 'settings' : 'home');
+      const settings = hash.match(/^#\/settings(?:\/(prompts))?$/);
+      shell.showPage(settings ? 'settings' : 'home');
+      if (settings) showSettings(settings[1] || 'general');
       shell.renderCourses(openCourse, null);
     }
   } catch (error) {
@@ -64,6 +67,7 @@ window.addEventListener('hashchange', route);
 (async () => {
   try {
     installAgentSettings();
+    installSettingsNavigation();
     await refreshAgentStatus();
     const health = await api('/api/health');
     state.uploadLimit = health.upload_limit;

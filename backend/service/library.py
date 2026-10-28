@@ -1,6 +1,7 @@
 """Application use cases. No HTTP, SQL, PDF.js or concrete adapter imports."""
 from dataclasses import asdict
 import logging
+import json
 from pathlib import PurePosixPath
 from backend.domain.models import (CATEGORIES, SUPPORTED_EXTENSIONS, Course, Document,
                                   Message, Note, Source, StudyError, new_id, now)
@@ -129,19 +130,32 @@ class LibraryService:
             message_id = new_id()
             label = {"translate": "翻译", "explain": "解释", "ask": question, "summary": "当前页内容预览"}[action]
             common = dict(course_id=course_id, document_id=document_id, name=document["name"],
-                          page_start=source.page_start, page_end=source.page_end, selected_text=selected, action=action)
+                          page_start=source.page_start, page_end=source.page_end, selected_text=selected, action=action,
+                          source_json=json.dumps(dict(kind='document',id=document_id,**source.snapshot(document),selected_text=selected),ensure_ascii=False))
             self.repository.add_messages([
                 Message(id=new_id(), role="user", content=label + (f"：{selected}" if selected else ""), created_at=now(), **common),
                 Message(id=message_id, role="assistant", content=content, created_at=now(), **common)])
         return {"mode": "demo", "content": content, "citation": source.snapshot(document), "message_id": message_id}
 
-    def save_note(self, course_id, document_id, page_start, selected_text="", body="", demo=False, page_end=None):
-        selected, body = selected_text.strip(), body.strip()
-        if not selected and not body:
+    def save_note(self, course_id, document_id=None, page_start=1, selected_text="", body="", demo=False, page_end=None, source=None, run_id=None):
+        selected, body = selected_text, body.strip()
+        if not selected.strip() and not body:
             raise StudyError("笔记不能为空。")
         if len(selected) > 5000 or len(body) > 10000:
             raise StudyError("笔记超过字符上限。")
-        document, source = self.source(course_id, document_id, page_start, page_end)
-        note = Note(new_id(), course_id, document_id, document["name"], source.page_start,
-                    source.page_end, selected, body, demo, now())
+        from backend.service.text_sources import SourceResolver
+        self.get_course(course_id)
+        resolved = SourceResolver(self).resolve(course_id,selected,source,document_id,page_start,page_end)
+        if not resolved:
+            raise StudyError('保存笔记需要有效来源。')
+        if run_id:
+            result = self.repository.result(run_id)
+            previous = json.loads(result['source'] or 'null') or {}
+            keys = ('kind','id','start','end','text_field','document_id','page_start','page_end','selected_text')
+            if result['course_id'] != course_id or any(previous.get(k) != resolved.get(k) for k in keys):
+                raise StudyError('回复与笔记选区来源不一致。')
+            resolved['citations'] = json.loads(result['citations'])
+            demo = demo or result['mode'] == 'demo'
+        note = Note(new_id(), course_id, resolved['document_id'], resolved['name'], resolved['page_start'],
+                    resolved['page_end'], selected, body, demo, now(), json.dumps(resolved,ensure_ascii=False))
         return self.repository.add_note(note)

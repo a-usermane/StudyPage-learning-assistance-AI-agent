@@ -3,32 +3,39 @@ import {post, coursePath, runAgent} from '../services/client.js';
 import {state} from '../state/store.js';
 import {SelectionSession} from './selection-state.js';
 import {SelectionPopup} from './selection-popup.js';
+import {TextSourceRegistry, bodyAdapter, readerAdapter, operationPayload, sourceKey} from '../services/text-sources.js';
 
 // Captures sources and coordinates transport. The view and session own presentation/state.
 export class SelectionTools {
   constructor(conversation, sendMessage) {
     this.conversation = conversation; this.sendMessage = sendMessage;
+    this.sources = new TextSourceRegistry();
+    this.sources.register(readerAdapter(() => state.reader));
+    this.sources.register(bodyAdapter('message'));
+    this.sources.register(bodyAdapter('note'));
     this.view = new SelectionPopup({
       switch: action => this.open(action), close: () => this.clear(),
       expand: () => this.expand(), collapse: () => this.collapse(),
       draft: value => { if (this.popup) this.popup.current.draft = value; },
       includeReply: include => { if (this.popup) { this.popup.includeReply = include; this.render(); } },
-      submit: () => this.submit(), retry: () => this.request(),
+      submit: () => this.submit(), retry: () => this.request(), stop: () => this.stop(),
+      detail: () => this.explainDetail(),
       copy: () => this.copy(), save: () => this.save(), transfer: () => this.transfer(),
-      sourceButton: source => conversation.sourceButton(source), fileName: () => state.document?.name || ''
+      sourceButton: source => conversation.sourceButton(source)
     });
     document.addEventListener('pointerup', event => {
-      if ($('viewer').contains(event.target)) setTimeout(() => this.capture(), 0);
+      if (!event.target.closest('#selection-popup, #selection-toolbar, input, textarea, button, select, .menu')) setTimeout(() => this.capture(), 0);
     });
-    document.addEventListener('keyup', event => { if (event.shiftKey && event.key.startsWith('Arrow')) this.capture(); });
+    document.addEventListener('keyup', event => { if (event.shiftKey || (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') setTimeout(() => this.capture(), 0); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape') this.clear(); });
     document.addEventListener('pointerdown', event => {
       if (!$('viewer').contains(event.target) && !$('selection-toolbar').contains(event.target) && !$('selection-popup').contains(event.target)
-          && !event.target.closest('.menu')) this.clear();
+          && !event.target.closest('[data-text-source], .menu')
+          && !(this.selection?.kind !== 'document' && event.target.closest('#document-select, .reader-toolbar'))) this.clear();
     });
     document.addEventListener('layoutstart', () => this.clear());
     window.addEventListener('resize', () => this.clear());
-    $('reader-surface').addEventListener('scroll', () => this.clear(), {passive: true});
+    $('reader-surface').addEventListener('scroll', () => this.clearDocument(), {passive: true});
     $('selection-toolbar').onpointerdown = event => event.preventDefault();
     for (const button of document.querySelectorAll('[data-selection-action]')) button.onclick = () => this.open(button.dataset.selectionAction);
   }
@@ -39,23 +46,29 @@ export class SelectionTools {
       tab.progress = '';
     }
   }
+  stop() {
+    if (!this.popup) return;
+    this.cancelRequest();
+    this.popup.current.status = 'error'; this.popup.current.error = '生成已停止，可重试。';
+    this.render();
+  }
   clear() {
     this.cancelRequest(); this.popup = this.selection = null;
     $('selection-toolbar').hidden = true; this.view.hide();
   }
+  clearDocument() { if (!this.selection?.kind || this.selection.kind === 'document') this.clear(); }
   capture() {
-    if (!state.reader || !state.course) return;
-    const source = state.reader.getSelectionContext();
+    if (!state.course) return;
+    const source = this.sources.capture(state.course.id);
     if (!source) { this.clear(); return; }
-    if (source.selected_text.length > 5000) { this.clear(); return notify('一次最多选择 5000 个字符，请缩小选区。', true); }
-    if (this.popup && source.document_id === this.popup.source.document_id && source.selected_text === this.popup.source.selected_text
-        && source.page_start === this.popup.source.page_start && source.page_end === this.popup.source.page_end) return;
+    if ([...source.selected_text].length > 5000) { this.clear(); return notify('一次最多选择 5000 个字符，请缩小选区。', true); }
+    if (this.popup && sourceKey(source) === sourceKey(this.popup.source)) return;
     this.clear(); this.selection = source;
     if (state.translation) this.open('translate');
     else positionFloating($('selection-toolbar'), source.rect);
   }
   open(action) {
-    if (!this.popup && this.selection) this.popup = new SelectionSession(this.selection, state.course.id);
+    if (!this.popup && this.selection) this.popup = new SelectionSession(this.selection, this.selection.course_id || state.course.id);
     if (!this.popup || this.popup.saving) return;
     this.cancelRequest(); this.popup.switch(action);
     $('selection-toolbar').hidden = true;
@@ -78,6 +91,12 @@ export class SelectionTools {
     if (!question) return notify('请输入问题。', true);
     this.request(question);
   }
+  explainDetail() {
+    if (!this.popup || this.popup.action !== 'explain' || this.popup.saving || this.popup.current.status === 'loading') return;
+    this.popup.current.detailed = true;
+    // Generate immediately, independently of an unsent input draft.
+    this.request(this.popup.current.question || '');
+  }
   async request(question = this.popup?.current.draft.trim() || '') {
     const popup = this.popup;
     if (!popup || popup.action === 'note' || popup.saving) return;
@@ -86,9 +105,10 @@ export class SelectionTools {
     this.cancelRequest(); this.abort = new AbortController();
     const controller = this.abort, tab = popup.current;
     tab.status = 'loading'; tab.error = ''; tab.progress = ''; this.render();
-    const {rect, ...source} = popup.source;
+    const source = operationPayload(popup.source);
     try {
-      const result = await runAgent(popup.courseId, {...source, action, question,
+      const requestAction = action === 'explain' && tab.detailed ? 'explain_detail' : action;
+      const result = await runAgent(popup.courseId, {...source, action: requestAction, question,
         session_id: popup.sessionId, persist: false, mode: state.agentMode}, {signal: controller.signal,
         onEvent: event => {
           if (this.popup !== popup || controller.signal.aborted || popup.action !== action) return;

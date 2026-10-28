@@ -38,7 +38,7 @@ class CourseTools:
 
     def search_documents(self, query, document_id=None, scope="current"):
         r = self.request
-        if r.action == "explain":
+        if r.action in {"explain", "explain_detail"} and r.document_id:
             if document_id and document_id != r.document_id:
                 raise StudyError("解释仅允许搜索当前文件。")
             document_id = r.document_id
@@ -48,7 +48,7 @@ class CourseTools:
 
     def read_pages(self, document_id, start, end=None):
         r = self.request
-        if r.action == "explain" and document_id != r.document_id:
+        if r.action in {"explain", "explain_detail"} and r.document_id and document_id != r.document_id:
             raise StudyError("解释仅允许读取当前文件。")
         return self.accept(self.retriever.read(r.course_id,document_id,start,end or start))
 

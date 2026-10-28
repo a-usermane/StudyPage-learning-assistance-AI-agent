@@ -5,13 +5,15 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, SecretStr
 from backend.domain.agent import AgentRequest
+from .schemas import TextSourceRequest
 import asyncio
 
 router = APIRouter(prefix="/api")
 
 class RunRequest(BaseModel):
-    action: Literal["ask","translate","explain","summary"] = "ask"
+    action: Literal["ask","translate","explain","explain_detail","summary"] = "ask"
     question: str = Field(default="",max_length=2000)
+    source: TextSourceRequest | None = None
     document_id: str | None = None
     page_start: int = Field(default=1,ge=1)
     page_end: int | None = Field(default=None,ge=1)
@@ -38,7 +40,7 @@ def save_credentials(payload: CredentialRequest, request: Request):
     return request.app.state.learning.save_api_key(payload.model_id, payload.api_key.get_secret_value())
 
 class PromptRequest(BaseModel):
-    prompt_id: Literal["base", "ask", "translate", "explain", "summary"]
+    prompt_id: Literal["base", "ask", "translate", "explain", "explain_detail", "summary", "course_overview"]
     content: str = Field(max_length=20000)
     expected_version: str
 

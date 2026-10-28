@@ -33,6 +33,7 @@ class AgentRequest:
     session_id: str | None = None
     persist: bool = True
     mode: str | None = None
+    source: dict | None = None
 
 @dataclass(frozen=True)
 class RunEvent:

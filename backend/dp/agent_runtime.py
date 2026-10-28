@@ -54,7 +54,7 @@ class LearningRuntime:
         self.gateway, self.mcp, self.checkpoint_path = gateway, mcp, checkpoint_path
         self.tools = ToolRegistry()
         self.workflows = {"course_qa": self._deep, "contextual_explanation": self._deep,
-                          "direct_translation": self._direct, "page_summary": self._direct}
+                          "direct_translation": self._direct, "page_summary": self._direct, "course_overview": self._direct}
 
     def register(self, name, workflow):
         self.workflows[name] = workflow
@@ -72,16 +72,24 @@ class LearningRuntime:
         for message in messages:
             if message.type == "tool":
                 message.content = "以前的工具结果已省略；需要时重新查询当前课程。"
-            elif message.type == "human" and '\n\n<materials>' in str(message.content):
-                message.content = str(message.content).split('\n\n<materials>')[0]
+            elif message.type == 'human':
+                content = str(message.content)
+                if '\n\n<operation_context>' in content:
+                    content = content.split('\n\n<operation_context>')[0]
+                elif '\n\n<materials>' in content:
+                    content = content.split('\n\n<materials>')[0]
+                message.content = content
         return messages
 
     def input_message(self, context):
         r = context.request
         rows = context.tools.current()
-        question = r.question or {"translate":"翻译选区", "explain":"解释选区", "summary":"总结当前页"}.get(r.action,"回答问题")
+        question = r.question or {"translate":"翻译选区", "explain":"解释选区", "explain_detail":"详细解释选区", "summary":"总结当前页"}.get(r.action,"回答问题")
         context.metadata["question"] = question
-        return HumanMessage(content=f"问题：{question}\n选区：{r.selected_text}\n当前来源：{json.dumps(context.source,ensure_ascii=False)}\n\n<materials>\n{json.dumps(rows,ensure_ascii=False)}\n</materials>")
+        origin = {k:v for k,v in (context.source or {}).items() if k not in {'local_context','selected_text','citations'}}
+        background = json.dumps(context.metadata.get('course_context'),ensure_ascii=False)
+        local = json.dumps(context.metadata.get('local_context',''),ensure_ascii=False)
+        return HumanMessage(content=f"问题：{question}\n选区：{r.selected_text}\n当前来源：{json.dumps(origin,ensure_ascii=False)}\n\n<operation_context>\n<course_context>{background}</course_context>\n<local_context>{local}</local_context>\n<materials>\n{json.dumps(rows,ensure_ascii=False)}\n</materials>\n</operation_context>")
 
     async def _direct(self, model, config, context):
         history = self.history(context)

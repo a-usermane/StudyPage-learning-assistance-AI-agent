@@ -9,7 +9,7 @@ import sqlite3
 
 from backend.domain.models import StudyError, default_category, new_id, now
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA = """
 CREATE TABLE courses (
  id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','ready')), created_at TEXT NOT NULL);
@@ -81,7 +81,7 @@ def initialize(data_dir):
     manifest_path = backup / "manifest.json"
     if target.exists():
         with connection(target) as db:
-            if db.execute("PRAGMA user_version").fetchone()[0] not in {1, SCHEMA_VERSION}:
+            if db.execute("PRAGMA user_version").fetchone()[0] not in {1, 2, SCHEMA_VERSION}:
                 raise RuntimeError("数据库版本不兼容；请保留数据并检查程序版本。")
         if marker.exists() and manifest_path.exists():
             _archive_legacy(data_dir, backup)
@@ -96,6 +96,8 @@ def initialize(data_dir):
         staged.replace(target)
     from backend.dp.agent_storage import migrate_agent_schema
     migrate_agent_schema(target, data_dir)
+    from backend.dp.text_storage import migrate_text_sources
+    migrate_text_sources(target, data_dir)
     with connection(target) as db:
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("DELETE FROM courses WHERE status='pending' AND NOT EXISTS (SELECT 1 FROM documents WHERE course_id=courses.id)")
@@ -197,6 +199,23 @@ class SQLiteLibraryRepository:
     def document(self, document_id):
         return self._one("documents", document_id, "资料")
 
+    def message(self, identity):
+        row = self._one('messages', identity, '消息')
+        with connection(self.path) as db:
+            metadata = db.execute('SELECT citations FROM agent_messages WHERE message_id=?',(identity,)).fetchone()
+            row['citations'] = json.loads(metadata['citations']) if metadata else []
+        return row
+
+    def result(self, identity):
+        with connection(self.path) as db:
+            row = db.execute('SELECT * FROM agent_results WHERE run_id=?',(identity,)).fetchone()
+            if row is None:
+                raise StudyError('回复不存在。',404)
+            return dict(row)
+
+    def note(self, identity):
+        return self._one('notes', identity, '笔记')
+
     def create_course(self, course):
         with connection(self.path) as db:
             _insert(db, "courses", asdict(course))
@@ -242,12 +261,22 @@ class SQLiteLibraryRepository:
             messages = [dict(row) for row in db.execute("SELECT * FROM messages WHERE course_id=? ORDER BY created_at,rowid", (course_id,))]
             for message in messages:
                 metadata = db.execute("SELECT * FROM agent_messages WHERE message_id=?", (message["id"],)).fetchone()
+                message["source"] = self._visible_source(db,json.loads(message.pop("source_json", "null")))
                 message["mode"] = metadata["mode"] if metadata else "demo"
                 message["citations"] = json.loads(metadata["citations"]) if metadata else []
                 for citation in message["citations"]:
                     if not db.execute("SELECT 1 FROM documents WHERE id=?",(citation["document_id"],)).fetchone():
                         citation["document_id"] = None
             return messages
+
+    @staticmethod
+    def _visible_source(db, source):
+        if source and source.get('citations'):
+            source = {**source,'citations':[SQLiteLibraryRepository._visible_source(db,c) for c in source['citations']]}
+        if source and source.get('document_id'):
+            if not db.execute('SELECT 1 FROM documents WHERE id=?',(source['document_id'],)).fetchone():
+                return {**source,'document_id':None,'deleted':True}
+        return source
 
     def add_messages(self, messages):
         with connection(self.path) as db:
@@ -262,7 +291,10 @@ class SQLiteLibraryRepository:
             if document_id:
                 sql += " AND document_id=?"
                 params.append(document_id)
-            return [dict(row) for row in db.execute(sql + " ORDER BY created_at DESC,rowid DESC", params)]
+            result = [dict(row) for row in db.execute(sql + " ORDER BY created_at DESC,rowid DESC", params)]
+            for row in result:
+                row['source'] = self._visible_source(db,json.loads(row.pop('source_json', 'null')))
+            return result
 
     def add_note(self, note):
         with connection(self.path) as db:

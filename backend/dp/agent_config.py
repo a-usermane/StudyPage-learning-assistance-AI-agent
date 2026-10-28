@@ -13,7 +13,7 @@ import yaml
 from dotenv import dotenv_values
 from backend.domain.models import StudyError
 
-WORKFLOWS = {"course_qa", "direct_translation", "contextual_explanation", "page_summary"}
+WORKFLOWS = {"course_qa", "direct_translation", "contextual_explanation", "page_summary", "course_overview"}
 TOOLS = {"list_documents", "search_documents", "read_pages", "search_notes"}
 
 @dataclass(frozen=True)
@@ -234,6 +234,8 @@ class LocalProfileRegistry:
             plugins.append(entry)
         # Standalone resources stay enabled; a shared resource remains enabled
         # while at least one successfully loaded owning plugin uses it.
+        if 'course_overview' in profiles and 'model' not in agents['profiles']['course_overview'] and 'profile:course_overview' not in claimed:
+            profiles['course_overview']['model'] = profiles['ask']['model']
         enabled_skills = (set(skills) - declared_skills) | active_skills
         enabled_mcp = (set(mcp) - declared_mcp) | active_mcp
         self._validate_profiles(profiles, models, skills, mcp)
@@ -262,16 +264,20 @@ class LocalProfileRegistry:
         return ConfigSnapshot(version, mode, models, profiles, prompts, skills, mcp, tuple(plugins))
 
     def _validate_profiles(self, profiles, models, skills, mcp):
-        if set(profiles) != {"ask", "translate", "explain", "summary"}:
-            raise StudyError("需要 ask、translate、explain、summary 四个功能配置。")
-        for profile in profiles.values():
+        required = {'ask','translate','explain','explain_detail','summary'}
+        if not required <= set(profiles) or set(profiles) - required - {'course_overview'}:
+            raise StudyError('功能配置缺失或含未注册的功能。')
+        for name, profile in profiles.items():
             if profile.get("model") not in models or profile.get("workflow") not in self.workflows:
                 raise StudyError("功能引用了未注册的模型或工作流。")
             if set(profile.get("tools", [])) - self.tools - set(mcp) or set(profile.get("skills", [])) - set(skills):
                 raise StudyError("功能引用了不存在的工具或 Skill。")
-            for key, maximum in (("timeout", 300), ("max_tool_calls", 20), ("max_steps", 60)):
+            for key, maximum in (("timeout", 1800 if name == "course_overview" else 300), ("max_tool_calls", 20), ("max_steps", 60)):
                 if not 1 <= int(profile.get(key, 0)) <= maximum:
                     raise StudyError("运行超时、工具次数或步数限制无效。")
+
+        if 'course_overview' in profiles and not 1 <= int(profiles['course_overview'].get('max_model_calls',30)) <= 200:
+            raise StudyError('课程概况模型调用上限必须介于1和200之间。')
 
     def status(self):
         value = self.current

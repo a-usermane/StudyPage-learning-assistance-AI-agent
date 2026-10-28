@@ -84,6 +84,7 @@ class Message:
     selected_text: str
     action: str
     created_at: str
+    source_json: str = 'null'
 
 @dataclass(frozen=True)
 class Note:
@@ -97,3 +98,4 @@ class Note:
     body: str
     demo: bool
     created_at: str
+    source_json: str = 'null'

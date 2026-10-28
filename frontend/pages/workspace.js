@@ -5,11 +5,13 @@ import {createReader} from '../readers/index.js';
 import {Conversation} from '../components/conversation.js';
 import {SelectionTools} from '../components/selection.js';
 import {AutoGrowInput} from '../components/input.js';
+import {CourseOverview} from '../components/course-overview.js';
 
 export class Workspace {
   constructor(onCoursesChanged) {
     this.onCoursesChanged = onCoursesChanged;
     this.version = this.documentVersion = 0;
+    this.overview = new CourseOverview();
     this.conversation = new Conversation(source => this.goSource(source));
     this.selection = new SelectionTools(this.conversation, (...args) => this.send(...args));
     this.composerInput = new AutoGrowInput($('question'), {min: 26});
@@ -32,7 +34,7 @@ export class Workspace {
     this.chatAbort?.abort();
     const ticket = ++this.version;
     this.documentVersion++;
-    this.selection.clear();
+    this.selection.clear(); this.overview.clear();
     await this.releaseReader();
     if (ticket !== this.version) return;
     this.conversation.clear();
@@ -43,6 +45,7 @@ export class Workspace {
     state.course = course; state.documents = documents;
     $('course-heading').textContent = course.name;
     this.fileOptions(); this.failures();
+    this.overview.load(courseId);
     const remembered = preferredDocument || preference('file-' + courseId, null);
     const chosen = documents.find(doc => doc.id === remembered) || documents[0];
     await Promise.all([this.conversation.load(courseId, chosen?.id), chosen ? this.loadDocument(chosen.id) : this.emptyReader()]);
@@ -76,7 +79,7 @@ export class Workspace {
     const ticket = ++this.documentVersion;
     const document = state.documents.find(doc => doc.id === id);
     if (!document) return;
-    this.selection.clear();
+    this.selection.clearDocument();
     await this.releaseReader();
     if (ticket !== this.documentVersion) return;
     state.document = document;
@@ -118,7 +121,8 @@ export class Workspace {
   }
   controls() {
     const ready = Boolean(state.document && state.reader?.ready && !state.reader.destroyed);
-    for (const id of ['zoom-in', 'zoom-out', 'fit-width', 'summary', 'delete-document', 'translation-toggle']) $(id).disabled = !ready;
+    for (const id of ['zoom-in', 'zoom-out', 'fit-width', 'summary', 'delete-document']) $(id).disabled = !ready;
+    $('translation-toggle').disabled = !state.course;
     const canChat = Boolean(state.course && (!state.document || ready));
     $('question').disabled = !canChat;
     $('send').disabled = !canChat || state.chatBusy;
@@ -128,13 +132,19 @@ export class Workspace {
     document.dispatchEvent(new Event('workspacechange'));
   }
   zoom(value) {
-    this.selection.clear();
+    this.selection.clearDocument();
     state.reader?.setZoom(value);
     this.zoomLabel();
   }
   zoomLabel() { $('zoom-label').textContent = state.reader?.zoom === 1 ? '适合宽度' : Math.round((state.reader?.zoom || 1) * 100) + '%'; }
   async goSource(source) {
+    if (source.kind && source.kind !== 'document') {
+      this.selection.clear();
+      $('workspace').dataset.mobilePane = 'chat';
+      return this.conversation.navigateSource(source);
+    }
     if (!source.document_id) return;
+    if (!state.documents.some(doc => doc.id === source.document_id)) return notify('原资料已删除，来源文字快照仍保留在记录中。', true);
     this.selection.clear();
     $('workspace').dataset.mobilePane = 'reader';
     if (state.document?.id === source.document_id) state.reader?.scrollToSource(source);
@@ -194,7 +204,7 @@ export class Workspace {
   async leave() {
     this.chatAbort?.abort();
     const ticket = ++this.version; this.documentVersion++;
-    this.selection.clear(); this.conversation.clear();
+    this.selection.clear(); this.conversation.clear(); this.overview.clear();
     await this.releaseReader();
     if (ticket !== this.version) return;
     state.course = state.document = null; state.documents = [];

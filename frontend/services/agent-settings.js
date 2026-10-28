@@ -24,8 +24,7 @@ export async function refreshAgentStatus() {
 }
 
 export function installAgentSettings() {
-  const section = $('settings-page');
-  section.querySelector('p').textContent = '在此保存 AI API Key 和修改各功能的系统提示词。接口地址和模型名称在 config/models.yaml 中修改。';
+  const section = $('settings-general');
   const form = node('form', 'agent-key-form');
   const title = node('h2', '', 'AI API Key');
   const modelLabel = node('label', 'field', '模型配置');
@@ -55,7 +54,7 @@ export function installAgentSettings() {
     finally { models.dispatchEvent(new Event('change')); }
   };
   form.append(title, modelLabel, keyLabel, hint, save, description);
-  section.insertBefore(form, $('settings-home'));
+  section.append(form);
   const label = node('label', '', '运行模式 '), select = node('select'); select.id = 'agent-mode-select';
   for (const [value, text] of [['', '跟随本地配置'], ['demo', '演示模式'], ['live', '真实 AI']]) {
     const option = node('option', '', text); option.value = value; select.append(option);
@@ -78,7 +77,6 @@ export function installAgentSettings() {
     finally { diagnose.disabled = false; }
   };
   const status = node('pre', 'agent-status'); status.id = 'agent-status';
-  section.insertBefore(label, $('settings-home')); section.insertBefore(reload, $('settings-home'));
-  section.insertBefore(diagnose, $('settings-home')); section.append(status);
-  installPromptSettings(section, $('settings-home'));
+  section.append(label, reload, diagnose, status);
+  installPromptSettings($('settings-prompts'));
 }

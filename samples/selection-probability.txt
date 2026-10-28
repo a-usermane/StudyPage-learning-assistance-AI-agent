@@ -1,0 +1,15 @@
+Probability / 概率论：通用划词验证资料
+
+本课程属于数学与概率论，主要学习随机变量、概率分布、期望和概率密度函数。
+
+For a continuous random variable X, the PDF (probability density function) is denoted by f_X(x). It satisfies f_X(x) >= 0 and its integral over the real line is one.
+这里 X 表示随机变量，x 表示取值，f_X(x) 表示概率密度，而不是单点事件的概率。
+
+The PDF integrates to one.
+在上一句中选择 PDF，应根据概率语境译为“概率密度函数”。
+
+Download the PDF document and open it in the reader.
+本句明确描述文档格式；即使课程是概率论，PDF 仍表示 PDF 文件。
+
+An unidentified acronym XYZ appears here without a definition.
+本文件没有给出 XYZ 的全称，不应仅凭课程领域补造定义。

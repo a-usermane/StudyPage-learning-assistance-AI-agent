@@ -16,6 +16,11 @@ original = application.router.lifespan_context
 async def fixture(app):
     async with original(app):
         app.state.learning.runner.gateway = TestGateway()
+        class OverviewFixture:
+            async def generate(self,snapshot,course_id,name,supplement,pages,manifest,progress):
+                progress('测试模型正在读取全部资料',1)
+                return dict(course_name=name,fields=['计算机科学'],main_content='学习梯度下降、递归与相关算法。')
+        app.state.overview.generator = OverviewFixture()
         registry = app.state.learning.registry
         snapshot = registry.snapshot()
         for model in snapshot.models.values(): model['api_key'] = 'test-only'

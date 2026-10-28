@@ -5,7 +5,9 @@ const definitions = [
   ['base', '通用系统提示词', '适用于所有功能：回答语言、来源规范和通用规则。'],
   ['ask', '课程问答', '主对话的学习问答与资料检索规则。'],
   ['translate', '翻译', '划词翻译及翻译追问的语言、术语与格式规则。'],
-  ['explain', '解释', '概念、变量和公式解释，以及举例与引用规则。'],
+  ['explain', '简短解释', '默认两句话内介绍概念、变量和公式的含义。'],
+  ['explain_detail', '详细解释', '解释窗口的详细解释按钮使用：细致讲解、必要步骤和小例子。'],
+  ['course_overview', '课程概况', '归纳课程领域和主要内容，为划词消歧提供背景；独立于当前页总结。'],
   ['summary', '总结', '当前页或幻灯片的总结规则。'],
 ];
 let editors = [], loading = false, saving = false;
@@ -18,6 +20,7 @@ export async function refreshPromptSettings(discard = false) {
     const result = await api('/api/agent/prompts');
     for (const editor of editors) {
       if (editor.dirty && !discard) continue;
+      if (!(editor.id in result.prompts)) { editor.loaded = false; editor.state.textContent = '本地配置未启用此功能'; continue; }
       editor.input.value = result.prompts[editor.id];
       editor.saved = editor.input.value;
       editor.version = result.version;
@@ -33,10 +36,10 @@ export async function refreshPromptSettings(discard = false) {
   }
 }
 
-export function installPromptSettings(section, before) {
+export function installPromptSettings(section) {
   const group = node('section', 'prompt-settings'); group.id = 'prompt-settings';
-  const heading = node('h2', '', '系统提示词');
-  const description = node('p', '', '修改各功能发送给 AI 的规则。保存到本地提示词文件，新请求立即生效，正在生成的回答使用原版本。功能提示词会与通用提示词组合。');
+  const heading = node('h2', '', '提示词管理');
+  const description = node('p', '', '修改各功能发送给 AI 的规则。保存到本地提示词文件，新请求立即生效，正在生成的回答使用原版本。学习功能与通用提示词组合；课程概况使用独立提示词，不进入课程聊天。');
   const refresh = node('button', 'quiet', '重新载入提示词'); refresh.type = 'button'; refresh.id = 'prompt-refresh';
   refresh.onclick = () => {
     if (editors.some(e => e.dirty) && !confirm('重新载入将放弃尚未保存的提示词修改。继续？')) return;
@@ -88,6 +91,6 @@ export function installPromptSettings(section, before) {
     footer.append(state, save); form.append(label, hint, input, footer); group.append(form);
     return editor;
   });
-  section.insertBefore(group, before);
+  section.append(group);
   refreshPromptSettings();
 }

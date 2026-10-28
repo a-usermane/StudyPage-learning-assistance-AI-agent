@@ -26,7 +26,9 @@ export class SelectionPopup {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); handlers.submit(); }
     };
     $('popup-include-reply').onchange = event => handlers.includeReply(event.target.checked);
+    $('popup-stop').onclick = () => handlers.stop();
     $('popup-retry').onclick = () => handlers.retry();
+    $('popup-detail').onclick = () => handlers.detail();
     $('popup-close').onclick = () => handlers.close();
     $('popup-copy').onclick = () => handlers.copy();
     $('popup-save').onclick = () => handlers.save();
@@ -64,7 +66,12 @@ export class SelectionPopup {
     $('popup-answer').setAttribute('aria-busy', String(current.status === 'loading'));
     $('popup-demo').hidden = (current.status === 'loading' ? current.mode : result?.mode) !== 'demo';
     $('popup-retry').hidden = current.status !== 'error';
-    const citations = result?.citations?.length ? result.citations : [result?.citation || {...source, name: this.handlers.fileName()}];
+    $('popup-stop').hidden = current.status !== 'loading';
+    $('popup-detail').hidden = action !== 'explain';
+    $('popup-detail').disabled = busy;
+    $('popup-detail').textContent = current.detailed ? '重新详细解释' : '详细解释';
+    $('popup-title').textContent = action === 'explain' && current.detailed ? '详细解释' : titles[action];
+    const citations = result?.citations?.length ? result.citations : [result?.citation || source];
     $('popup-source').replaceChildren(...citations.map(item => this.handlers.sourceButton(item)));
     $('popup-attach').hidden = !isNote || !session.noteReplyAction;
     $('popup-include-reply').checked = session.includeReply;

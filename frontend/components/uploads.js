@@ -85,6 +85,12 @@ export class UploadDialog {
       if (lastDocument || this.queue.some(item => item.status === '成功')) {
         state.failedUploads.set(this.course.id, failures);
         $('upload-dialog').close();
+        if (this.creating) {
+          const courseId = this.course.id;
+          post(coursePath(courseId, 'overview/runs'), {initial: true, mode: state.agentMode})
+            .then(() => document.dispatchEvent(new CustomEvent('overviewchange', {detail: courseId})))
+            .catch(error => notify('课程已创建；概况暂未生成：' + error.message, true));
+        }
         await this.onCoursesChanged();
         await this.onCompleted(this.course, lastDocument?.id, failures);
       } else {

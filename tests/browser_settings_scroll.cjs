@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
   for(const viewport of [{width:1360,height:850},{width:600,height:700}]){
    const context=await browser.newContext({viewport});
    const page=await context.newPage();
-   await page.goto('http://127.0.0.1:8003/#/settings');
+   await page.goto('http://127.0.0.1:8003/#/settings/prompts');
    await page.waitForSelector('#prompt-summary:not([disabled])');
    if(viewport.width<800){
     if(!await page.locator('#content-frame').evaluate(el=>el.classList.contains('menu-collapsed'))) await page.click('#menu-button');

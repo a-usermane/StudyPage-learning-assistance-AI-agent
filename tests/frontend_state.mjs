@@ -42,6 +42,30 @@ test('autosize caps long text and resets after clearing', () => {
   element.scrollHeight = 20; input.setValue('');
   assert.equal(element.style.height, '44px'); assert.equal(element.style.overflowY, 'hidden');
 });
+test('detailed explanation preserves drafts, regenerates and resets on new selection', () => {
+  const tools = Object.create(SelectionTools.prototype);
+  tools.popup = new SelectionSession(source, 'course');
+  tools.popup.switch('explain');
+  tools.popup.complete('explain', {content: '简短定义',mode:'live'}, '解释变量');
+  tools.popup.current.draft = '尚未发送的草稿';
+  let requests = [];
+  tools.request = question => requests.push(question);
+  tools.explainDetail();
+  assert.equal(tools.popup.current.detailed,true);
+  assert.deepEqual(requests,['解释变量']);
+  assert.equal(tools.popup.current.draft,'尚未发送的草稿');
+  tools.popup.current.status='loading';tools.explainDetail();
+  assert.equal(requests.length,1);
+  tools.popup.current.status='ready';
+  tools.popup.complete('explain',{content:'详细定义及小例子',mode:'live'});
+  tools.popup.switch('translate');tools.explainDetail();
+  assert.equal(requests.length,1);
+  tools.popup.switch('explain');
+  assert.equal(tools.popup.current.detailed,true);
+  tools.popup.switch('note');
+  assert.equal(tools.popup.notePayload().body,'详细定义及小例子');
+  assert.equal(new SelectionSession(source,'course').tabs.explain.detailed,false);
+});
 test('rapid drawer reversals finish in the latest state and restore focus', async () => {
   const elements = new Map(); const events = [];
   for (const id of ['content-frame','course-menu-slot','course-menu','drawer-backdrop','menu-button']) {
@@ -85,4 +109,30 @@ test('late replies cannot overwrite a changed tab or a new selection', async () 
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(tools.popup.current.result, null); assert.equal(tools.popup.source.selected_text, 'new');
   globalThis.fetch = originalFetch;
+});
+
+test('generic operation payload strips the currently open document and display metadata', async () => {
+  const {operationPayload, sourceKey} = await import('../frontend/services/text-sources.js');
+  const ref = {kind:'message',id:'message',course_id:'c',start:2,end:5,text_field:'content',selected_text:'PDF',rect:{left:4},document_id:'unrelated'};
+  const payload=operationPayload(ref);
+  assert.deepEqual(payload,{source:{kind:'message',id:'message',start:2,end:5,text_field:'content'},selected_text:'PDF'});
+  assert.notEqual(sourceKey(ref),sourceKey({...ref,start:3}));
+  const tools=Object.create(SelectionTools.prototype);let cleared=0;tools.clear=()=>cleared++;
+  tools.selection=ref;tools.clearDocument();assert.equal(cleared,0);
+  tools.selection={kind:'document'};tools.clearDocument();assert.equal(cleared,1);
+});
+
+test('an overview response cannot overwrite edits made while its request was in flight', async () => {
+  const {CourseOverview} = await import('../frontend/components/course-overview.js');
+  const originalFetch=globalThis.fetch;let finish;
+  globalThis.fetch=()=>new Promise(resolve=>{finish=resolve;});
+  try {
+    const editor=Object.create(CourseOverview.prototype);
+    Object.assign(editor,{courseId:'c',ticket:0,editTicket:0,editVersion:'old',dirty:false,fill(){this.filled=true;},render(){}});
+    const pending=editor.refresh(true);
+    editor.dirty=true;editor.editTicket++;
+    finish({ok:true,json:async()=>({version:'new',run:null})});await pending;
+    assert.equal(editor.filled,undefined);assert.equal(editor.dirty,true);
+    assert.equal(editor.editVersion,'old');
+  } finally {globalThis.fetch=originalFetch;}
 });

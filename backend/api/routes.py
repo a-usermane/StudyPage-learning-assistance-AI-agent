@@ -14,7 +14,7 @@ def library(request):
 def health(request: Request):
     settings = request.app.state.settings
     return {"app": "study-local", "mode": request.app.state.learning.registry.snapshot().mode, "data_dir": str(settings.data_dir),
-            "schema_version": 2, "upload_limit": settings.upload_limit}
+            "schema_version": 3, "upload_limit": settings.upload_limit}
 
 @router.get("/courses")
 def courses(request: Request):

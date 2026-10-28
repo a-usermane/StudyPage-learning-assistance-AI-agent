@@ -16,7 +16,7 @@ from backend.service.library import LibraryService
 from backend.api.routes import router
 from backend.api.middleware import UploadBodyLimit
 
-def create_app(data_dir=None, service=None, settings=None, learning=None, config_root=None):
+def create_app(data_dir=None, service=None, settings=None, learning=None, config_root=None, overview=None):
     settings = settings or Settings.load(data_dir)
     temp = settings.cache_dir / "tmp"
     temp.mkdir(parents=True, exist_ok=True)
@@ -50,9 +50,18 @@ def create_app(data_dir=None, service=None, settings=None, learning=None, config
                 SQLiteSessionStore(settings.data_dir / "db/agent-sessions.db"),AgentRecordStore(repository),mcp)
         else:
             application.state.learning = learning
+        from backend.dp.overview_store import LocalOverviewStore
+        from backend.dp.overview_model import OverviewModelGenerator
+        from backend.service.course_overview import CourseOverviewService
+        learning_service = application.state.learning
+        overview_store = LocalOverviewStore(settings.data_dir,settings.cache_dir)
+        application.state.overview = overview if overview is not None else CourseOverviewService(application.state.library.repository,learning_service.registry,
+            overview_store,OverviewModelGenerator(learning_service.runner.gateway,overview_store))
+        learning_service.overview = application.state.overview
         try:
             yield
         finally:
+            await application.state.overview.close()
             await application.state.learning.close()
 
     application = FastAPI(title="课程书桌 · 本地演示", lifespan=lifespan)
@@ -83,6 +92,8 @@ def create_app(data_dir=None, service=None, settings=None, learning=None, config
     application.include_router(router)
     from backend.api.agent_routes import router as agent_router
     application.include_router(agent_router)
+    from backend.api.overview_routes import router as overview_router
+    application.include_router(overview_router)
     application.mount("/static", StaticFiles(directory=ROOT / "frontend"), name="static")
     application.mount("/samples", StaticFiles(directory=ROOT / "samples", check_dir=False), name="samples")
 

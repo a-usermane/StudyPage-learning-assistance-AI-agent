@@ -45,6 +45,7 @@
 .popup-result {padding: 14px 16px 8px;}
 .popup-answer {font-size: 14px; line-height: 1.8; margin: 9px 0 12px; max-height: 220px; overflow: auto; overscroll-behavior: contain;}
 .popup-answer.is-hint {color: #87918d; font-size: 13px;}
+.popup-detail {font-size: 12px; color: #446959; background: #edf4f0; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px;}
 .popup-question-snapshot {font-size: 12px; color: #84928a; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere;}
 .popup-original {font-size: 12px; color: #8a9690; margin-top: 6px;}
 .popup-original summary {overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; padding: 4px 0;}
@@ -83,8 +84,16 @@ dialog::backdrop {background: #233f3933; backdrop-filter: blur(2px);}
   .popup-actions button {font-size: 11px; padding: 7px;}
 }
 .agent-status { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 760px; font: inherit; line-height: 1.7; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
-#settings-page > label { display: block; margin: 20px 0; }
-#settings-page > button { margin-right: 8px; }
+.settings-panel > label {display: block; margin: 20px 0;}
+.settings-panel > button {margin-right: 8px; margin-bottom: 8px;}
+.settings-tabs {display: flex; gap: 8px; border-bottom: 1px solid var(--line); margin: 24px 0; max-width: 760px;}
+.settings-tabs a {display: block; padding: 10px 14px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0;}
+.settings-tabs a:hover {background: #f0f5f3;}
+.settings-tabs a[aria-selected="true"] {color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;}
+.settings-tabs a:focus-visible {outline: 2px solid #789b91; outline-offset: 2px;}
+.settings-panel {max-width: 760px;}
+.settings-panel > p {font-size: 13px;}
+#settings-home {margin: 12px 0 0;}
 .agent-key-form {max-width: 600px; margin: 24px 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fafcfb;}
 .agent-key-form h2 {font-size: 17px; margin: 0 0 18px;}
 .agent-key-form .field {display: flex; flex-direction: column; gap: 8px; margin: 14px 0;}
@@ -92,7 +101,7 @@ dialog::backdrop {background: #233f3933; backdrop-filter: blur(2px);}
 .agent-key-form input {width: 100%; box-sizing: border-box;}
 .agent-key-form small {display: block; margin-top: 14px; color: #75877e; line-height: 1.7;}
 .agent-key-hint {font-size: 13px; color: #75877e;}
-.prompt-settings {max-width: 760px; margin: 30px 0;}
+.prompt-settings {max-width: 760px; margin: 0 0 30px;}
 .prompt-settings h2 {font-size: 18px; margin: 0 0 10px;}
 .prompt-settings > p {font-size: 13px; line-height: 1.8; color: #75877e;}
 .prompt-editor {margin-top: 18px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #fafcfb;}
@@ -103,3 +112,16 @@ dialog::backdrop {background: #233f3933; backdrop-filter: blur(2px);}
 .prompt-editor-footer {display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-top: 12px;}
 .prompt-save-state {font-size: 12px; color: #75877e;}
 @media (max-width: 800px) {.prompt-editor {padding: 14px;} .prompt-editor-footer {flex-wrap: wrap;}}
+
+/* Shared text surfaces and course context editor. */
+.source-highlight {animation: source-highlight 1.8s ease-out;}
+@keyframes source-highlight {0%, 40% {background: #e4eee7;} 100% {background: transparent;}}
+.overview-entry {margin-left: auto; flex-shrink: 0; font-size: 12px; color: #648276;}
+.overview-dialog {width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; box-sizing: border-box;}
+.overview-dialog .field {display: flex; flex-direction: column; gap: 7px; margin: 16px 0 8px;}
+.overview-dialog input, .overview-dialog textarea {width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; line-height: 1.7;}
+.overview-dialog textarea {resize: vertical; padding: 10px 12px; border: 1px solid #e2e9e5; border-radius: 10px; min-height: 80px; background: #fafcfb;}
+.overview-dialog .muted, .overview-status {font-size: 12px; line-height: 1.8;}
+.overview-status {white-space: pre-wrap; background: #f4f7f5; padding: 12px; border-radius: 10px;}
+.overview-dialog .dialog-footer {display: flex; gap: 6px; flex-wrap: wrap;}
+@media (prefers-reduced-motion: reduce) {.source-highlight {animation: none; outline: 2px solid #9db9aa;}}

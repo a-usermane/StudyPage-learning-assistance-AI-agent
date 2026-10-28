@@ -5,6 +5,8 @@ import re
 from backend.domain.agent import RunContext, RunEvent
 from backend.domain.models import Message, StudyError, new_id, now
 from backend.service.agent_tools import CourseTools
+from backend.service.text_sources import SourceResolver
+from dataclasses import replace
 
 class LearningService:
     def __init__(self, library, registry, runner, retriever, sessions, records, mcp):
@@ -33,20 +35,22 @@ class LearningService:
         if self.closed:
             raise StudyError("服务正在关闭。",503)
         self.library.get_course(request.course_id)
-        if request.action not in {"ask","translate","explain","summary"}:
+        if request.action not in {"ask","translate","explain","explain_detail","summary"}:
             raise StudyError("学习功能无效。")
         if len(request.selected_text)>5000 or len(request.question)>2000:
             raise StudyError("选区或问题超过字符上限。")
         if request.action=="ask" and not request.question.strip():
             raise StudyError("请输入问题。")
-        if request.action in {"translate","explain"} and not request.selected_text.strip():
+        if request.action in {"translate","explain","explain_detail"} and not request.selected_text.strip():
             raise StudyError("请先选择文字。")
-        if request.action!="ask" and not request.document_id:
-            raise StudyError("此功能需要当前资料。")
-        source = None
-        if request.document_id:
-            doc, location = self.library.source(request.course_id,request.document_id,request.page_start,request.page_end)
-            source = {**location.snapshot(doc),"selected_text":request.selected_text}
+        source = SourceResolver(self.library).resolve(request.course_id,request.selected_text,request.source,
+                   request.document_id,request.page_start,request.page_end)
+        if request.action != 'ask' and not source:
+            raise StudyError('此功能需要有效选区来源。')
+        if request.action == 'summary' and source['kind'] != 'document':
+            raise StudyError('当前页总结需要资料来源。')
+        if source:
+            request = replace(request,document_id=source['document_id'],page_start=source['page_start'],page_end=source['page_end'])
         snapshot = self.registry.snapshot()
         mode = request.mode or snapshot.mode
         if mode not in {"demo","live"}:
@@ -71,6 +75,10 @@ class LearningService:
         tools = CourseTools(self.library.repository,self.retriever,request,profile.get("tools",[]),profile["max_tool_calls"])
         context = RunContext(run_id,thread,request,snapshot,profile,mode,tools,source=source,
                              prompt=snapshot.prompts["base"]+'\n\n'+snapshot.prompts[request.action])
+        if source:
+            context.metadata['local_context'] = source.get('local_context','')
+            overview = getattr(self, 'overview', None)
+            context.metadata['course_context'] = overview.context(request.course_id) if overview else None
         self.sessions.run(run_id,request.course_id,thread,"queued",snapshot.version)
         return context
 
@@ -90,11 +98,19 @@ class LearningService:
                         if context.mode=="demo":
                             request = context.request
                             if request.document_id:
-                                result = self.library.answer(request.course_id,request.document_id,request.page_start,request.action,
+                                demo_action = "explain" if request.action == "explain_detail" else request.action
+                                result = self.library.answer(request.course_id,request.document_id,request.page_start,demo_action,
                                           request.selected_text,request.question,request.page_end,persist=False)
                                 content = result["content"]
+                                if request.action == "explain_detail":
+                                    content += "\n\n详细解释需连接真实 AI；以上为演示词典内容。"
                             else:
-                                content = "演示模式，未连接 AI\n问题："+request.question+"\n请配置模型以使用课程检索问答。"
+                                action = 'explain' if request.action == 'explain_detail' else request.action
+                                content = self.library.answers.answer(action,request.selected_text,request.question,
+                                          (context.source or {}).get('local_context',''))
+                                if request.action == 'explain_detail':
+                                    content += '\n\n详细解释需连接真实 AI。'
+
                             await queue.put(RunEvent("delta",{"text":content}))
                         else:
                             async for event in self.runner.stream(context.request,context):
@@ -190,8 +206,8 @@ class LearningService:
                 source = {**source,"document_id":None}
         source = source or {"document_id":None,"name":"课程问答","page_start":1,"page_end":1}
         common = dict(course_id=course_id,document_id=source["document_id"],name=source["name"],
-                      page_start=source["page_start"],page_end=source["page_end"],selected_text=source.get("selected_text",""),action=action)
-        label = question or {"translate":"翻译选区","explain":"解释选区","summary":"总结当前页"}.get(action,"课程问题")
+                      page_start=source["page_start"],page_end=source["page_end"],selected_text=source.get("selected_text",""),action=action,source_json=json.dumps(source,ensure_ascii=False))
+        label = question or {"translate":"翻译选区","explain":"解释选区","explain_detail":"详细解释选区","summary":"总结当前页"}.get(action,"课程问题")
         return [Message(new_id(),role="user",content=label,created_at=now(),**common),
                 Message(new_id(),role="assistant",content=content,created_at=now(),**common)]
 
@@ -210,7 +226,7 @@ class LearningService:
                 thread = f"course:{course_id}:chat:live"
                 stored = self.sessions.load(thread)
                 source = json.loads(row['source'])
-                user = row['question'] or {'translate':'翻译选区','explain':'解释选区'}.get(row['action'],'选区问题')
+                user = row['question'] or {'translate':'翻译选区','explain':'解释选区','explain_detail':'详细解释选区'}.get(row['action'],'选区问题')
                 pair = [{'type':'human','data':{'content':user+'\n选区来源：'+json.dumps(source,ensure_ascii=False)}},
                         {'type':'ai','data':{'content':row['content']}}]
                 self.sessions.save(thread,course_id,'ask',stored['messages']+pair,stored['summary'],stored.get('artifacts',{}))

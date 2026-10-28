@@ -123,6 +123,29 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         resumed = SQLiteSessionStore(self.sessions.path).load(translated.thread_id)
         self.assertEqual(len(resumed['messages']),2)
 
+    async def test_detailed_explanation_uses_own_prompt_thread_and_scope(self):
+        args=dict(selected_text='Gradient descent',session_id='details',persist=False)
+        brief,_ = await self.collect(self.request(action='explain',**args))
+        request=AgentRequest(self.course,action='explain_detail',document_id=self.doc,mode='live',**args)
+        context,events = await self.collect(request)
+        self.assertTrue(any(e.type=='done' for e in events),events)
+        self.assertNotEqual(brief.thread_id,context.thread_id)
+        self.assertIn('详细解释',context.prompt)
+        self.assertIn('小例子',context.prompt)
+        self.assertNotEqual(context.prompt,brief.prompt)
+        self.assertTrue(self.sessions.load(context.thread_id)['messages'])
+        resumed=self.learning.prepare(request)
+        self.assertEqual(resumed.thread_id,context.thread_id)
+        with self.assertRaises(StudyError):context.tools.read_pages(self.otherdoc,1)
+        extra=self.library.import_document(self.course,'second.txt','other',io.BytesIO(b'Another file.'))['id']
+        with self.assertRaises(StudyError):context.tools.search_documents('another',extra,'course')
+        with self.assertRaises(StudyError):self.learning.prepare(self.request(action='explain_detail',selected_text=''))
+        self.assertEqual(self.library.history(self.course),[])
+        await self.learning.transfer(self.course,context.run_id)
+        self.assertEqual(self.library.history(self.course)[0]['content'],'详细解释选区')
+        _,demo=await self.collect(AgentRequest(self.course,action='explain_detail',document_id=self.doc,selected_text='Gradient descent',mode='demo',persist=False))
+        self.assertTrue(any(e.type=='done' and '详细解释需连接真实 AI' in e.data['content'] for e in demo),demo)
+
     async def test_scope_citation_and_deletion(self):
         with self.assertRaises(StudyError): self.learning.prepare(AgentRequest(self.course,document_id=self.otherdoc,question='x'))
         context = self.learning.prepare(self.request())
@@ -230,6 +253,81 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(bad.status_code,400)
                 unknown = await client.post('/api/courses/'+self.other+'/agent/runs/unknown/transfer',json={})
                 self.assertEqual(unknown.status_code,404)
+
+    async def test_generic_sources_http_context_notes_and_transfer(self):
+        import httpx
+        from backend.app import create_app
+        from backend.domain.models import Message,new_id,now
+        from types import SimpleNamespace
+        message_id=new_id();text='🙂 The PDF integrates to one. '+('unrelated history '*300)
+        self.library.repository.add_messages([Message(message_id,self.course,None,'课程问答','assistant',text,1,1,'','ask',now())])
+        source=dict(kind='message',id=message_id,start=text.index('PDF'),end=text.index('PDF')+3)
+        seen=[]
+        class CapturingModel:
+            async def astream(self,messages):
+                seen.append(messages)
+                yield AIMessageChunk(content='概率密度函数')
+        self.runtime.gateway=SimpleNamespace(create=lambda cfg:CapturingModel())
+        app=create_app(self.root,service=self.library,learning=self.learning)
+        async with app.router.lifespan_context(app):
+            overview=app.state.overview
+            overview.save(self.course,'学习',['概率论'],'连续随机变量与密度','不要发送此补充说明','0')
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as client:
+                cp='/api/courses/'+self.course
+                payload=dict(action='translate',source=source,selected_text='PDF',persist=False,session_id='same',mode='live')
+                response=await client.post(cp+'/agent/runs',json=payload)
+                self.assertEqual(response.status_code,200,response.text);self.assertIn('event: done',response.text)
+                final=json.loads(next(block.split('data: ')[1] for block in response.text.split('\n\n') if block.startswith('event: done')))
+                self.assertEqual(final['citation']['kind'],'message');self.assertIsNone(final['citation']['document_id'])
+                self.assertEqual(seen[-1][-1].content.count('<course_context>'),1)
+                self.assertNotIn('不要发送此补充说明',seen[-1][-1].content)
+                self.assertNotIn(text,seen[-1][-1].content)
+                overview.save(self.course,'学习',['概率论'],'更新后的概况','',overview.get(self.course)['version'])
+                await client.post(cp+'/agent/runs',json=payload)
+                human=[m.content for m in seen[-1] if m.type=='human']
+                self.assertEqual(sum(h.count('<course_context>') for h in human),1)
+                self.assertIn('更新后的概况',human[-1])
+                wrong=await client.post('/api/courses/'+self.other+'/agent/runs',json=payload)
+                self.assertEqual(wrong.status_code,404)
+                bad=await client.post(cp+'/agent/runs',json={**payload,'document_id':self.doc})
+                self.assertEqual(bad.status_code,400)
+                note=await client.post(cp+'/notes',json={'source':source,'selected_text':'PDF','body':'自己的理解','demo':False,'run_id':final['run_id']})
+                self.assertEqual(note.status_code,201,note.text)
+                notes=(await client.get(cp+'/notes')).json();self.assertEqual(notes[0]['source']['id'],message_id)
+                mismatch=await client.post(cp+'/notes',json={'document_id':self.doc,'selected_text':'PDF','body':'note','run_id':final['run_id']})
+                self.assertEqual(mismatch.status_code,400)
+                transfer=await client.post(cp+'/agent/runs/'+final['run_id']+'/transfer')
+                self.assertEqual(transfer.status_code,200,transfer.text)
+                history=(await client.get(cp+'/messages')).json()
+                self.assertEqual(history[-1]['source']['id'],message_id)
+                self.assertIsNone(history[-1]['document_id'])
+
+    async def test_overview_http_generation_status_conflict_and_pending(self):
+        import httpx
+        from backend.app import create_app
+        app=create_app(self.root,service=self.library,learning=self.learning)
+        class Generator:
+            async def generate(self,snapshot,cid,name,supplement,pages,manifest,progress):
+                progress('读取全部资料',1)
+                return dict(course_name=name,fields=['计算机科学'],main_content='学习优化算法。')
+        async with app.router.lifespan_context(app):
+            app.state.overview.generator=Generator()
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://testserver') as client:
+                path='/api/courses/'+self.course+'/overview'
+                value=(await client.get(path)).json();self.assertEqual(value['version'],'0')
+                pending=(await client.post(path+'/runs',json={'mode':'demo','initial':True})).json()
+                self.assertEqual(pending['status'],'pending')
+                payload=dict(course_name='学习',fields=['算法'],main_content='原概况',supplement='说明',expected_version='0')
+                saved=await client.put(path,json=payload);self.assertEqual(saved.status_code,200,saved.text)
+                self.assertEqual((await client.put(path,json=payload)).status_code,409)
+                run=(await client.post(path+'/runs',json={'mode':'live'})).json()
+                task=app.state.overview.active.get(self.course)
+                if task:await task[0]
+                status=(await client.get(path+'/runs/'+run['run_id'])).json()
+                self.assertEqual(status['status'],'complete',status)
+                self.assertEqual((await client.get(path)).json()['main_content'],'学习优化算法。')
+                self.assertEqual((await client.get('/api/courses/'+self.other+'/overview/runs/'+run['run_id'])).status_code,404)
+                self.assertEqual((await client.post(path+'/runs/'+run['run_id']+'/cancel')).status_code,200)
 
     async def test_deep_history_compaction_persists_internal_artifacts(self):
         from langchain_core.messages import HumanMessage, messages_to_dict

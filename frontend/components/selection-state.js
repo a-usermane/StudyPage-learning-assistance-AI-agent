@@ -1,3 +1,4 @@
+import {operationPayload} from '../services/text-sources.js';
 // One selected source owns all four tabs. No DOM or transport dependency.
 export const selectionActions = ['translate', 'explain', 'ask', 'note'];
 export class SelectionSession {
@@ -5,7 +6,7 @@ export class SelectionSession {
     this.source = source; this.courseId = courseId; this.action = 'translate';
     this.sessionId = globalThis.crypto?.randomUUID?.() || ('selection-' + Date.now() + '-' + Math.random().toString(16).slice(2));
     this.tabs = Object.fromEntries(selectionActions.map(action => [action, {
-      result: null, status: 'idle', error: '', draft: '', expanded: false, question: ''
+      result: null, status: 'idle', error: '', draft: '', expanded: false, question: '', detailed: false
     }]));
     this.noteReplyAction = null; this.includeReply = true; this.saving = false;
   }
@@ -25,7 +26,6 @@ export class SelectionSession {
   notePayload() {
     const result = this.reply(), draft = this.tabs.note.draft.trim();
     const body = [result?.content, draft].filter(Boolean).join('\n\n我的笔记：\n');
-    const {rect, ...source} = this.source;
-    return {...source, body, demo: Boolean(result && (result.mode === 'demo' || result.content?.startsWith('演示')))};
+    return {...operationPayload(this.source), ...(result?.run_id ? {run_id: result.run_id} : {}), body, demo: Boolean(result && (result.mode === 'demo' || result.content?.startsWith('演示')))};
   }
 }

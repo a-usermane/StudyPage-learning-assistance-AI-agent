@@ -1,0 +1,13 @@
+Robotics and embodied AI：通用划词验证资料
+
+本课程属于人工智能、强化学习与机器人领域，主要学习马尔可夫决策过程、价值函数、策略梯度及机器人控制。
+
+An MDP is a Markov decision process.
+A stochastic policy pi(a|s) gives the probability of selecting action a in state s.
+符号：s 为状态，a 为动作，pi 为策略。这里 policy 表示动作选择策略。
+
+What is a policy?
+选中该问题执行翻译时，只翻译问题，不回答问题。
+
+The university attendance policy is available on the student website.
+本句中的 policy 指大学的规章制度，局部明确含义优先于强化学习课程背景。

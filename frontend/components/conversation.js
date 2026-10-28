@@ -1,5 +1,6 @@
 import {$, node, notify, locationLabel} from '../shared/dom.js';
 import {api, post, coursePath} from '../services/client.js';
+import {registerTextBody} from '../services/text-sources.js';
 
 export class Conversation {
   constructor(onSource) {
@@ -18,10 +19,12 @@ export class Conversation {
     }
   }
   sourceButton(source) {
-    const button = node('button', 'source-button', source.document_id
-      ? `↗ ${source.name} · ${locationLabel(source)}` : `${source.name} · 原资料已删除`);
+    source = source.source || source;
+    const generic = source.kind === 'message' || source.kind === 'note';
+    const button = node('button', 'source-button', generic ? '↗ ' + (source.name || (source.kind === 'message' ? '对话消息' : '笔记'))
+      : source.document_id ? `↗ ${source.name} · ${locationLabel(source)}` : `${source.name || '来源快照'} · 原资料已删除`);
     if (source.document_id && source.line_start) button.textContent = '↗ ' + source.name + ' · 第 ' + source.line_start + '–' + source.line_end + ' 行';
-    button.disabled = !source.document_id;
+    button.disabled = !generic && !source.document_id;
     button.onclick = () => this.onSource(source).catch(error => notify(error.message, true));
     return button;
   }
@@ -47,21 +50,22 @@ export class Conversation {
     }
     for (const message of messages) {
       const article = node('article', 'message ' + message.role);
+      article.dataset.messageId = message.id;
       article.append(node('div', 'role', message.role === 'user' ? '你' : '课程书桌'));
       if (message.role === 'assistant' && message.mode === 'demo') article.append(node('span', 'demo-badge', '演示模式，未连接 AI'));
-      article.append(node('div', 'message-body', message.content));
+      article.append(registerTextBody(node('div', 'message-body', message.content), 'message', message.id, id, 'content'));
       const actions = node('div', 'message-actions');
-      const citations = message.citations?.length ? message.citations : (message.document_id || message.name !== '课程问答' ? [message] : []);
+      const citations = message.citations?.length ? message.citations : (message.source || message.document_id || message.name !== '课程问答' ? [message] : []);
       for (const citation of citations) actions.append(this.sourceButton(citation));
       if (message.role === 'assistant') {
         const save = node('button', 'quiet', '保存为笔记');
-        save.disabled = !message.document_id;
+        save.disabled = false;
         save.onclick = async () => {
+          if ([...message.content].length > 10000) return notify('回复超过笔记长度上限，请选择需要保留的片段保存。', true);
           save.disabled = true;
           try {
-            await post(coursePath(id, 'notes'), {document_id: message.document_id,
-              page_start: message.page_start, page_end: message.page_end,
-              selected_text: message.selected_text, body: message.content, demo: message.mode === 'demo'});
+            await post(coursePath(id, 'notes'), {source: {kind: 'message', id: message.id, start: 0, end: 0, text_field: 'content'},
+              selected_text: '', body: message.content, demo: message.mode === 'demo'});
             if (this.courseId === id) await this.refreshNotes();
             notify('已保存为笔记。');
           } catch (error) { notify(error.message, true); }
@@ -84,10 +88,12 @@ export class Conversation {
     if (!notes.length) container.append(node('p', 'empty-state', '还没有笔记。可以保存所选原文、自己的理解，或一条演示回复。'));
     for (const note of notes) {
       const article = node('article', 'note');
+      article.dataset.noteId = note.id;
       article.append(this.sourceButton(note));
+      for (const citation of note.source?.citations || []) article.append(this.sourceButton(citation));
       if (note.demo) article.append(node('div', 'demo-badge', '包含演示内容，未连接 AI'));
-      if (note.selected_text) article.append(node('blockquote', '', note.selected_text));
-      article.append(node('div', 'note-body', note.body));
+      if (note.selected_text) article.append(registerTextBody(node('blockquote', '', note.selected_text), 'note', note.id, id, 'selected_text'));
+      article.append(registerTextBody(node('div', 'note-body', note.body), 'note', note.id, id, 'body'));
       const footer = node('div', 'note-footer');
       footer.append(node('span', '', new Date(note.created_at).toLocaleString()));
       const remove = node('button', 'quiet danger', '删除');
@@ -98,6 +104,19 @@ export class Conversation {
       };
       footer.append(remove); article.append(footer); container.append(article);
     }
+  }
+  async navigateSource(source) {
+    const isMessage = source.kind === 'message';
+    this.tab(isMessage ? 'chat' : 'notes');
+    if (isMessage) await this.refreshHistory();
+    else { $('notes-current').checked = false; await this.refreshNotes(); }
+    const id = isMessage ? 'messageId' : 'noteId';
+    const root = isMessage ? $('messages') : $('notes-list');
+    const target = [...root.querySelectorAll(isMessage ? '[data-message-id]' : '[data-note-id]')].find(el => el.dataset[id] === source.id);
+    if (!target) return notify('原消息或笔记已不存在，选区文字快照仍保留在记录中。', true);
+    target.scrollIntoView({block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+    target.classList.add('source-highlight');
+    setTimeout(() => target.classList.remove('source-highlight'), 1800);
   }
   clear() {
     this.courseId = this.documentId = null;
