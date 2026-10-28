@@ -36,7 +36,7 @@ class TestModel(BaseChatModel):
     def answer(self, messages):
         user = next((m for m in reversed(messages) if m.type=="human"),None)
         content = str(user.content) if user else ""
-        if "压缩" in str(messages[0].content) or "Context Extraction Assistant" in str(messages[0].content):
+        if str(messages[0].content).startswith("压缩为简短会话摘要") or "Context Extraction Assistant" in str(messages[0].content):
             return AIMessage(content="用户正在学习梯度下降，偏好中文解释。")
         after = messages[messages.index(user)+1:] if user else []
         prior_tools = [m for m in after if m.type=="tool"]

@@ -33,7 +33,10 @@ export class SelectionPopup {
     $('popup-copy').onclick = () => handlers.copy();
     $('popup-save').onclick = () => handlers.save();
     $('popup-transfer').onclick = () => handlers.transfer();
-    $('popup-original').ontoggle = () => this.reposition();
+    $('popup-original').ontoggle = () => {
+      $('popup-quote-summary').textContent = $('popup-original').open ? '收起原文与来源' : '展开原文与来源';
+      this.reposition();
+    };
     this.resize = new ResizeObserver(() => this.reposition());
     this.resize.observe($('selection-popup'));
   }
@@ -43,6 +46,7 @@ export class SelectionPopup {
   }
   render(session) {
     const changedAction = this.session === session && this.previousAction && this.previousAction !== session.action;
+    if (this.session !== session) $('popup-original').open = false;
     this.session = session;
     const {action, current, source} = session;
     const isNote = action === 'note', result = session.reply();
@@ -56,7 +60,7 @@ export class SelectionPopup {
     $('popup-title').textContent = titles[action];
     $('popup-panel').setAttribute('aria-labelledby', 'popup-tab-' + action);
     $('popup-quote').textContent = source.selected_text;
-    $('popup-quote-summary').textContent = '原文 · ' + source.selected_text.replace(/\s+/g, ' ').slice(0, 44);
+    $('popup-quote-summary').textContent = $('popup-original').open ? '收起原文与来源' : '展开原文与来源';
     const displayContent = content => content?.replace(/^演示模式，未连接 AI\s*/, '') || '';
     $('popup-answer').textContent = current.status === 'loading' ? (current.progress || '正在生成回复…')
       : current.error || (isNote ? [displayContent(result?.content), session.tabs.note.draft].filter(Boolean).join('\n\n我的笔记：\n')
